@@ -1,0 +1,39 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "harness"
+version = "0.1.0"
+description = "The companion code for Harness Engineering for Production AI Systems"
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "MIT" }
+authors = [{ name = "Ranjan Kumar" }]
+dependencies = [
+    "pydantic>=2.13,<3",
+]
+
+[project.optional-dependencies]
+# Only the chapters that wire a graph need these. Nothing below harness/graph/
+# imports them, and the test suite runs without them.
+graph = [
+    "langgraph>=1.2,<2",
+    "langchain>=1.4,<2",
+    "langchain-core>=1.6,<2",
+]
+dev = [
+    "pytest>=8",
+    "mypy>=1.11",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["harness"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+files = ["harness", "tests", "examples"]
