@@ -1,0 +1,30 @@
+# The signal schema for the billing support agent.
+#
+# Enforced at emit time, not documented in a wiki. A signal that would have been
+# unanswerable is refused where it is written rather than discovered where it is read.
+
+version = 1
+
+# On every signal. harness_version and model_id are here because six months later,
+# "which controls were in force" and "which model produced this" are the first two
+# questions and neither is recoverable from anywhere else.
+required = ["run_id", "at", "kind", "harness_version", "model_id"]
+
+# On every control signal. A refusal with no reason is a fact you cannot act on.
+required_for_control = ["component", "role", "outcome", "reason"]
+
+# These may appear in detail only as a digest. The signal stream outlives the run, the
+# incident, and often the customer relationship. It is not a place to keep their text.
+never_raw = [
+    "ticket_body",
+    "kb_article",
+    "account_summary",
+    "reply",
+    "invoice_rows",
+]
+
+max_detail_chars = 500
+
+# Long enough to answer a question about last year's incident, short enough to be a
+# decision somebody made rather than a default nobody chose.
+retention_days = 400

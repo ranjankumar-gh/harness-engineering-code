@@ -10,7 +10,13 @@ from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
 
+from typing import TYPE_CHECKING, Iterable
+
 from harness.roles import Role
+from harness.signals import SignalKind
+
+if TYPE_CHECKING:
+    from harness.signals import Signal
 
 
 class Outcome(str, Enum):
@@ -43,10 +49,19 @@ class Exercise:
 
 
 class ExerciseLog:
-    """In-memory for the book. In production this reads from Chapter 6's signal store."""
+    """A view over the signal stream, kept separate because it answers a narrower question."""
 
     def __init__(self) -> None:
         self._entries: list[Exercise] = []
+
+    @classmethod
+    def from_signals(cls, signals: Iterable["Signal"]) -> "ExerciseLog":
+        """Chapter 6 made good on the promise this docstring used to contain."""
+        log = cls()
+        for s in signals:
+            if s.kind is SignalKind.CONTROL and s.component and s.role and s.outcome:
+                log.record(s.component, s.role, s.outcome, s.at)
+        return log
 
     def record(self, component: str, role: Role, outcome: str, at: datetime) -> None:
         self._entries.append(Exercise(component, role, Outcome(outcome), at))
