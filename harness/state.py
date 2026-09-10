@@ -7,6 +7,8 @@ from decimal import Decimal
 from enum import Enum
 from typing import Generic, Protocol, TypeVar
 
+from harness.boundary import Context
+
 
 class Mode(str, Enum):
     COPILOT = "copilot"
@@ -49,7 +51,7 @@ class RunState(Generic[FactsT]):
     mode: Mode
     facts: FactsT
     band: str = "read-only"
-    context: tuple[str, ...] = ()
+    context: Context = field(default_factory=Context)   # Chapter 2
     proposal: Proposal | None = None
     decisions: tuple[GateRecord, ...] = ()
     budget: Budget = field(default_factory=Budget)
@@ -65,7 +67,7 @@ class RunContext(Protocol[FactsT]):
     mode: Mode
     facts: FactsT
     band: str
-    context: tuple[str, ...]
+    context: Context
     proposal: Proposal | None
     decisions: tuple[GateRecord, ...]
     budget: Budget
