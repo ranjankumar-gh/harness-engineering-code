@@ -1,0 +1,29 @@
+# The repair ladder for the billing support agent.
+#
+# Rungs are tried in order. Each one uses more information than the last and costs more,
+# which is why the order is fixed and the file may only omit rungs, never reorder them.
+#
+# The deterministic rung is the one most teams do not have. It is free, it needs no model
+# call, and it handles the majority of real structured-output failures: a fenced block, a
+# trailing comma, a number sent as a string. Chapter 17's overnight outage was this rung
+# being absent.
+
+[[step]]
+rung = "accept"
+max_attempts = 1
+
+[[step]]
+rung = "deterministic"
+max_attempts = 1
+
+[[step]]
+rung = "reask"
+max_attempts = 2          # the error signal, attached. Two, not five: see the chapter.
+
+[[step]]
+rung = "narrow"
+max_attempts = 1          # ask for less: one field, a simpler shape
+
+[[step]]
+rung = "defer"
+max_attempts = 1          # say so, and stop. Never omitted.

@@ -22,10 +22,21 @@ class Role(str, Enum):
 
 
 @dataclass(frozen=True)
+class Correction:
+    """What should change. Chapter 7's error signal, not merely that something is wrong."""
+
+    path: str                  # where in the output
+    problem: str               # what is wrong with it
+    expected: str              # what would be right
+    repaired: str | None = None   # the corrected value, when one can be computed
+
+
+@dataclass(frozen=True)
 class Verdict:
     name: str
     passed: bool
     detail: str = ""
+    corrections: tuple[Correction, ...] = ()   # Chapter 7
 
 
 class Disposition(str, Enum):
