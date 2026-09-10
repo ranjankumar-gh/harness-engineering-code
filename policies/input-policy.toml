@@ -1,0 +1,34 @@
+# The input policy for the billing support agent.
+#
+# Every field that reaches the context window is declared here, with the origin it is
+# tagged as and the normalisation applied to it. A field with no entry is refused, so
+# adding a new source of text is a change to this file and therefore a reviewable event.
+
+# Lower than the sum of the per-field limits (20000) on purpose. A total that no
+# in-limit request could reach would be a ceiling that can never fire, which is a
+# control in name only. See the test that asserts this stays true.
+max_total_chars = 16000
+
+[[field]]
+name = "system_prompt"
+origin = "operator"
+max_chars = 4000
+normalise = []                       # never touch your own text; there is nothing to clean
+
+[[field]]
+name = "ticket_body"
+origin = "customer"
+max_chars = 8000
+normalise = ["strip-control", "nfkc", "strip-quoted-reply", "collapse-whitespace"]
+
+[[field]]
+name = "kb_article"
+origin = "retrieved"
+max_chars = 6000
+normalise = ["strip-control", "nfkc", "collapse-whitespace"]
+
+[[field]]
+name = "invoice_row"
+origin = "tool-result"
+max_chars = 2000
+normalise = ["strip-control"]

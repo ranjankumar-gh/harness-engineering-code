@@ -25,6 +25,7 @@ graph = [
 dev = [
     "pytest>=8",
     "mypy>=1.11",
+    "langgraph>=1.2,<2",   # the graph tests in Chapter 4 onward; still no network or key
 ]
 
 [tool.hatch.build.targets.wheel]

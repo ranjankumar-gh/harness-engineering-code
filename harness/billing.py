@@ -7,8 +7,9 @@ wherever the rest of your domain model lives.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from decimal import Decimal
+from typing import Mapping
 
 from harness.state import RunState
 
@@ -27,6 +28,7 @@ class BillingFacts:
     account_id: str
     invoices: tuple[Invoice, ...] = ()
     refunded_today: Decimal = Decimal("0")
+    raw: Mapping[str, str] = field(default_factory=dict)   # Chapter 4: before intake
 
 
 BillingRun = RunState[BillingFacts]
