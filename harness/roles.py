@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Callable, Generic, Mapping, Protocol, TypeVar, runtime_checkable
 
 from harness.boundary import Context
-from harness.errors import OpenLoopError, Refused
+from harness.errors import BoundExceeded, OpenLoopError, Refused
 from harness.state import Proposal, RunContext, RunState
 
 FactsT = TypeVar("FactsT")
@@ -167,6 +168,17 @@ class HarnessRegistry(Generic[FactsT]):
             raise OpenLoopError(f"harness loop is open:\n{lines}")
 
 
+class Recorder(Protocol):
+    """Where the executor writes evidence that a control did something. Chapter 17."""
+
+    def record(self, component: str, role: Role, outcome: str, at: datetime) -> None: ...
+
+
+class _NullRecorder:
+    def record(self, component: str, role: Role, outcome: str, at: datetime) -> None:
+        return None
+
+
 class Harness(Generic[FactsT]):
     """The only path from a proposal to a tool."""
 
@@ -174,23 +186,56 @@ class Harness(Generic[FactsT]):
         self,
         registry: HarnessRegistry[FactsT],
         tools: Mapping[str, Callable[..., object]],
+        recorder: Recorder | None = None,
+        clock: Callable[[], datetime] | None = None,
     ) -> None:
         registry.assert_closed()
         self._registry = registry
         self._tools = dict(tools)
+        # `is not None`, not `or`: an ExerciseLog defines __len__, so an empty one is
+        # falsy and `recorder or _NullRecorder()` would silently discard it.
+        self._recorder: Recorder = _NullRecorder() if recorder is None else recorder
+        self._clock: Callable[[], datetime] = (
+            (lambda: datetime.now(timezone.utc)) if clock is None else clock
+        )
 
     def act(self, proposal: Proposal, run: RunState[FactsT]) -> object:
-        for bound in self._registry.bounds:
-            bound.check(run)
+        at = self._clock()
 
-        verdicts = {
-            c.emits: c.compare(proposal, run) for c in self._registry.comparators
-        }
+        for bound in self._registry.bounds:
+            try:
+                bound.check(run)
+            except BoundExceeded:
+                self._recorder.record(bound.name, Role.BOUND, "exceeded", at)
+                raise
+            except Exception:
+                self._recorder.record(bound.name, Role.BOUND, "raised", at)
+                raise
+            self._recorder.record(bound.name, Role.BOUND, "within", at)
+
+        verdicts: dict[str, Verdict] = {}
+        for comparator in self._registry.comparators:
+            try:
+                verdict = comparator.compare(proposal, run)
+            except Exception:
+                self._recorder.record(comparator.name, Role.COMPARATOR, "raised", at)
+                raise
+            outcome = "passed" if verdict.passed else "failed"
+            self._recorder.record(comparator.name, Role.COMPARATOR, outcome, at)
+            verdicts[comparator.emits] = verdict
 
         for gate in self._registry.gates:
-            decision = gate.decide(proposal, run, verdicts)
+            try:
+                decision = gate.decide(proposal, run, verdicts)
+            except Exception:
+                self._recorder.record(gate.name, Role.GATE, "raised", at)
+                raise
             run.record(gate.name, decision.disposition.value, decision.reason)
-            if decision.disposition is not Disposition.ALLOW:
+            allowed = decision.disposition is Disposition.ALLOW
+            self._recorder.record(
+                gate.name, Role.GATE, "allowed" if allowed else "refused", at
+            )
+            if not allowed:
                 raise Refused(gate.name, decision.disposition.value, decision.reason)
 
         run.budget.tool_calls += 1

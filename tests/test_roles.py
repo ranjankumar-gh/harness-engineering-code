@@ -111,3 +111,22 @@ def test_the_ceiling_permits_exactly_its_limit() -> None:
     assert run.budget.tool_calls == 12
     with pytest.raises(BoundExceeded, match="tool-call-ceiling"):
         harness.act(ok, run)
+
+
+def test_the_ceiling_counts_every_tool_not_just_the_metered_ones() -> None:
+    """Guards the refactor that excludes 'cheap' tools from the count.
+
+    A ceiling that counts only some tools still passes every test written against the
+    tools it counts, and no longer bounds the loop.
+    """
+    tools = {
+        "issue_refund": issue_refund,
+        "search_kb": lambda query: f"results for {query}",
+    }
+    harness = Harness(closed_registry(), tools)
+    run = a_run()
+    for _ in range(12):
+        harness.act(Proposal("search_kb", {"query": "duplicate charge"}), run)
+    assert run.budget.tool_calls == 12
+    with pytest.raises(BoundExceeded, match="tool-call-ceiling"):
+        harness.act(Proposal("search_kb", {"query": "duplicate charge"}), run)
