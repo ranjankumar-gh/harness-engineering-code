@@ -1,0 +1,40 @@
+# The resilience config for the billing support agent.
+#
+# Three controls that get written as one class and are not one thing: a comparator that
+# judges a dependency's health, a gate that refuses on its verdict, and a bound that
+# belongs to the run.
+
+[retry]
+max_attempts = 3
+initial_ms = 200
+multiplier = 2.0
+jitter = true             # not decoration: without it, a fleet retries in lockstep
+
+# What is worth retrying. A timeout, a rate limit, and a server error are all "the call
+# did not happen properly, and it might next time".
+retry_on = ["timeout", "rate-limited", "server-error"]
+
+# What is not, and the loader refuses these rather than trusting the comment.
+#   client-error : your request is wrong. Retrying repeats the mistake at the same speed.
+#   content      : it answered, badly. That is Chapter 7's repair ladder.
+
+[budget]
+# One resource. Retries from this chapter and repairs from Chapter 7 both spend it, and
+# the run is what owns it, because the run is what outlives every call in it.
+model_calls_per_run = 20
+wall_clock_seconds = 90
+
+[breaker]
+window_seconds = 60
+failure_threshold = 0.5
+minimum_calls = 10        # below this the rate is noise, and a breaker on noise is worse
+open_seconds = 30
+half_open_probes = 1
+
+# A fallback declares what it still satisfies. If it cannot satisfy the context floor from
+# Chapter 5, taking it is not a degraded run, it is a different system, and the harness
+# refuses rather than discovering that at assembly time.
+[[fallback]]
+to = "secondary"
+window_tokens = 16000
+max_band = "propose-only"
