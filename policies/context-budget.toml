@@ -1,0 +1,74 @@
+# The context budget for the billing support agent.
+#
+# Not a size limit. A priority order plus a floor. Every span that may reach the window is
+# declared with what happens when it does not fit, and where it sits when it does.
+#
+# max_tokens is the model's window. reserve_for_output is not negotiable: it is what the
+# model needs to answer in, and spending it is how a run dies at the last turn.
+
+max_tokens = 32000
+reserve_for_output = 4000
+
+# Chapter 2 measured the untrusted fraction and called it an instrument. Here it is a
+# ceiling, and on retrieval specifically rather than on untrusted text as a whole. See
+# the chapter for why the obvious version of this control does not work.
+max_retrieved_share = 0.30
+
+[[span]]
+label = "system_prompt"
+origin = "operator"
+requirement = "required"
+max_tokens = 900
+placement = "head"
+
+# The operating constraints are duplicated at the tail on purpose. See the chapter: the
+# ends of a window are the positions a model uses most reliably, and a constraint that is
+# present but buried is not reliably present.
+[[span]]
+label = "operating_constraints"
+origin = "operator"
+requirement = "required"
+max_tokens = 250
+placement = "tail"
+
+[[span]]
+label = "ticket_body"
+origin = "customer"
+requirement = "required"
+max_tokens = 2000
+placement = "tail"
+
+[[span]]
+label = "account_summary"
+origin = "tool-result"
+requirement = "required"
+max_tokens = 600
+placement = "head"
+
+[[span]]
+label = "invoice_rows"
+origin = "tool-result"
+requirement = "preferred"
+max_tokens = 3000
+placement = "head"
+
+[[span]]
+label = "kb_articles"
+origin = "retrieved"
+requirement = "preferred"
+max_tokens = 8000
+placement = "middle"
+
+[[span]]
+label = "thread_history"
+origin = "model"
+requirement = "optional"
+max_tokens = 12000
+placement = "middle"
+
+[[span]]
+label = "similar_tickets"
+origin = "retrieved"
+requirement = "optional"
+max_tokens = 6000
+placement = "middle"
