@@ -1,0 +1,145 @@
+# The checkpoint spec for the billing support agent.
+#
+# A checkpoint restores what the graph knew. It never restores what the world did. This
+# file is the Restore Line: the declared split between the two, field by field, plus what
+# each node costs when it runs a second time because the run was resumed.
+#
+# Rules this file follows:
+#   - Every field of RunState appears exactly once. A field with no rule here is a field
+#     whose restart behaviour nobody chose, and `undeclared()` fails the process at
+#     startup rather than letting the store choose.
+#   - Every rule carries a reason. A restore decision without one cannot be reviewed, and
+#     the loader refuses to load it.
+#   - A node that can call a write tool names the tool. `unpriced()` then reads the
+#     registry for whether repeating it is safe. Idempotency is declared in exactly one
+#     file and that file is tool-safety.toml.
+#   - `restored` is a claim about the code, not a wish. A field only comes back if every
+#     change to it went through the state channel. Mutating a nested object reaches one
+#     store and not the others.
+
+# ------------------------------------------------------------- the fields
+
+[[field]]
+name = "run_id"
+restore = "restored"
+why = """The effect log is keyed on it. Re-deriving it would orphan every effect this run
+already recorded, which is the same as having no log."""
+
+[[field]]
+name = "mode"
+restore = "restored"
+why = """A run that started in copilot must not finish in queue-drain because a worker
+picked it up overnight. The mode decides the gate bands, so letting a restart change it
+is letting a restart widen authority."""
+
+[[field]]
+name = "facts"
+restore = "rederived"
+why = """The ticket, the account and the invoices as they are now, not as they were when
+the process died. A refund banded against a four-hour-old ledger is a decision made on
+evidence that has since changed, and re-reading costs four idempotent reads."""
+
+[[field]]
+name = "band"
+restore = "rederived"
+why = """Derived from mode and policy at resume. A band read back from a checkpoint is a
+grant that outlived the reason it was given."""
+
+[[field]]
+name = "context"
+restore = "restored"
+why = """Re-deriving it means re-running retrieval, which spends budget and produces a
+different window, so the gates would be deciding about a run nobody executed. It comes
+back with its untrusted spans intact, which is safe only because the plan is frozen."""
+
+[[field]]
+name = "proposal"
+restore = "discarded"
+why = """The model said it before the crash, against facts that have since been
+re-derived. Proposing again costs one model call and removes every stale-action bug at
+once. Nothing downstream may read a proposal that outlived its evidence."""
+
+[[field]]
+name = "plan"
+restore = "restored"
+why = """It must not be re-frozen. At resume the window is already full of untrusted
+spans, so a fresh freeze would be a late freeze, which is the one thing Chapter 11's
+freeze exists to prevent. untrusted_at_freeze comes back with it as the evidence that it
+was frozen early."""
+
+[[field]]
+name = "decisions"
+restore = "restored"
+why = """The gate trail is append-only and a restart is not an amendment. It comes back
+as a list rather than a tuple, which is what rehydrate() is for."""
+
+[[field]]
+name = "budget"
+restore = "restored"
+why = """A bound that resets on restart is not a bound. This rule is the one that costs
+code: every counter change has to go through the state channel, because a nested
+mutation reaches SqliteSaver and never reaches Postgres."""
+
+# -------------------------------------------------------------- the nodes
+
+[[node]]
+name = "plan"
+replay = "safe"
+
+[[node]]
+name = "read"
+replay = "safe"
+
+[[node]]
+name = "propose"
+replay = "safe"
+
+# The interrupt lives here and nothing else does. A node holding an approval pause is
+# replayed in full on every resume, so anything else in it happens again.
+[[node]]
+name = "approve"
+replay = "safe"
+
+[[node]]
+name = "refund"
+replay = "logged"
+effect = "issue_refund"
+
+[[node]]
+name = "credit"
+replay = "logged"
+effect = "apply_credit"
+
+[[node]]
+name = "reply"
+replay = "logged"
+effect = "post_ticket_reply"
+
+[[node]]
+name = "close"
+replay = "safe"
+effect = "close_ticket"
+
+[[node]]
+name = "escalate"
+replay = "logged"
+effect = "escalate_to_human"
+
+# ---------------------------------------------------------- durability
+
+# How much of a run a crash is allowed to cost, per mode. "exit" appears nowhere: it
+# writes one checkpoint, so the run resumes and the history it resumed from is gone, and
+# the history is what Chapter 1's audit question 13 asks for.
+[durability]
+copilot = "async"        # a person is present; the worst case is one repeated superstep
+queue-drain = "sync"     # nobody is present; a crash is found hours later
+
+# ---------------------------------------------------------------- store
+
+[store]
+# A ten-step run ending on a 20,000-character context stored 251,692 bytes: checkpoints
+# plus pending writes, twelve times the context it finished holding. The ceiling is set
+# from that measurement, at roughly four such runs, and StoreCeiling raises rather than
+# trimming, because trimming a thread silently is how the evidence disappears.
+max_bytes_per_thread = 1000000
+keep_checkpoints = 40
