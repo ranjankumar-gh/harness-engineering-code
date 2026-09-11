@@ -21,11 +21,15 @@ graph = [
     "langgraph>=1.2,<2",
     "langchain>=1.4,<2",
     "langchain-core>=1.6,<2",
+    # Chapter 12's store. Its own distribution: installing langgraph does not
+    # bring the SQLite saver with it, and the import failure takes the suite.
+    "langgraph-checkpoint-sqlite>=3.1,<4",
 ]
 dev = [
     "pytest>=8",
     "mypy>=1.11",
     "langgraph>=1.2,<2",   # the graph tests in Chapter 4 onward; still no network or key
+    "langgraph-checkpoint-sqlite>=3.1,<4",   # Chapter 12's resume tests
 ]
 
 [tool.hatch.build.targets.wheel]
