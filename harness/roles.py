@@ -9,7 +9,7 @@ from typing import Any, Callable, Generic, Mapping, Protocol, TypeVar, runtime_c
 
 from harness.boundary import Context
 from harness.errors import BoundExceeded, OpenLoopError, Refused
-from harness.state import Proposal, RunContext, RunState
+from harness.state import Proposal, RunContext, RunState, Subject
 
 FactsT = TypeVar("FactsT")
 
@@ -84,7 +84,7 @@ class Gate(Protocol[FactsT]):
 
     def decide(
         self,
-        proposal: Proposal,
+        subject: Subject,
         run: RunContext[FactsT],
         verdicts: Mapping[str, Verdict],
     ) -> Decision: ...

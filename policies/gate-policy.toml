@@ -1,0 +1,86 @@
+# The gate policy for the billing support agent.
+#
+# Every rule answers one question: given what being wrong would cost, who is allowed to
+# decide? Code, a person, or nobody.
+#
+# A tool with no rule for the current mode is refused. There is no default-allow, and
+# adding a tool to the agent is therefore an edit to this file.
+
+# ------------------------------------------------------------------ reads
+# Reversible, no amount, nothing to threshold. Code decides.
+
+[[rule]]
+tool = "get_invoice"
+mode = "copilot"
+
+[[rule]]
+tool = "get_invoice"
+mode = "queue-drain"
+
+[[rule]]
+tool = "search_kb"
+mode = "copilot"
+
+[[rule]]
+tool = "search_kb"
+mode = "queue-drain"
+
+# ------------------------------------------------------------- reversible writes
+# apply_credit is reversible by counter-entry and leaves an audit trail, so the bands
+# are wider than a refund's. It is still not unlimited.
+
+[[rule]]
+tool = "apply_credit"
+mode = "copilot"
+requires = ["amount_on_invoice"]
+auto_below = "500.00"
+review_below = "5000.00"
+
+[[rule]]
+tool = "apply_credit"
+mode = "queue-drain"
+requires = ["amount_on_invoice"]
+auto_below = "100.00"
+review_below = "1000.00"
+
+# ----------------------------------------------------------- irreversible writes
+# Money leaves the company and no counter-entry brings it back. The queue-drain bands
+# are deliberately much narrower than copilot's, because the difference between the two
+# modes is whether anybody is there.
+
+[[rule]]
+tool = "issue_refund"
+mode = "copilot"
+requires = ["amount_on_invoice", "structured_output"]
+auto_below = "200.00"
+review_below = "2000.00"
+
+[[rule]]
+tool = "issue_refund"
+mode = "queue-drain"
+requires = ["amount_on_invoice", "structured_output"]
+auto_below = "50.00"
+# No review band at all. Nobody is there to review, so an amount above the automatic
+# band has no path rather than a slow one. Expressed by absence: a review_below of
+# "0.00" would mean the same thing and the loader rejects it, because a review band
+# below the auto band is a file that does not mean what its author thinks.
+
+# post_ticket_reply is irreversible in the way that matters: a customer has read it.
+[[rule]]
+tool = "post_ticket_reply"
+mode = "copilot"
+
+[[rule]]
+tool = "post_ticket_reply"
+mode = "queue-drain"
+requires = ["structured_output"]
+
+# The escape hatch is always available, in every mode, with no conditions. A harness
+# whose escalation path can itself be gated has no escape hatch.
+[[rule]]
+tool = "escalate_to_human"
+mode = "copilot"
+
+[[rule]]
+tool = "escalate_to_human"
+mode = "queue-drain"
