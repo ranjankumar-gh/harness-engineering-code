@@ -31,6 +31,10 @@ class Span:
 
     origin: Origin
     text: str
+    #: Which door the text came through, when a tool opened it. Chapter 2 needed only the
+    #: side of the boundary. Chapter 11 needs the door: refusing untrusted text in an
+    #: outward write refuses the job, and refusing the account record refuses the attack.
+    source: str = ""
 
     @property
     def trusted(self) -> bool:
@@ -43,8 +47,12 @@ class Context:
 
     spans: tuple[Span, ...] = ()
 
-    def add(self, origin: Origin, text: str) -> Context:
-        return Context(self.spans + (Span(origin, text),))
+    def add(self, origin: Origin, text: str, source: str = "") -> Context:
+        return Context(self.spans + (Span(origin, text, source),))
+
+    @property
+    def untrusted_spans(self) -> tuple[Span, ...]:
+        return tuple(s for s in self.spans if not s.trusted)
 
     def render(self) -> str:
         return "\n\n".join(s.text for s in self.spans)

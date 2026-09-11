@@ -55,6 +55,25 @@ class InboundRequest:
 
 
 @dataclass(frozen=True)
+class Plan:
+    """The steps this run may take, fixed before any untrusted text reached the model.
+
+    Chapter 11. The model chooses which plan, out of a list the operator wrote. It never
+    writes one. A tool that is not a step here is refused without anybody judging what it
+    would have done.
+    """
+
+    workflow: str
+    steps: tuple[str, ...]
+    #: Untrusted spans in the window when this was chosen. Anything but zero means the
+    #: plan was chosen after the attacker could already speak, and it is not a plan.
+    untrusted_at_freeze: int = 0
+
+    def allows(self, tool: str) -> bool:
+        return tool in self.steps
+
+
+@dataclass(frozen=True)
 class GateRecord:
     gate: str
     disposition: str
@@ -86,6 +105,7 @@ class RunState(Generic[FactsT]):
     band: str = "read-only"
     context: Context = field(default_factory=Context)   # Chapter 2
     proposal: Proposal | None = None
+    plan: Plan | None = None                            # Chapter 11
     decisions: tuple[GateRecord, ...] = ()
     budget: Budget = field(default_factory=Budget)
 
@@ -102,5 +122,6 @@ class RunContext(Protocol[FactsT]):
     band: str
     context: Context
     proposal: Proposal | None
+    plan: Plan | None
     decisions: tuple[GateRecord, ...]
     budget: Budget

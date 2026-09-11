@@ -1,0 +1,108 @@
+# The merge policy for the billing support agent.
+#
+# Chapter 9's gate asks what being wrong about an action would cost. Chapter 10's registry
+# asks whether the action exists at all. This file asks the question neither of them can:
+# who asked for it.
+#
+# Two parts.
+#
+#   [[workflow]]  The only plans a run may follow. The model picks a name from this list
+#                 before any untrusted text reaches it, and it cannot write a new one. So
+#                 the most an injected instruction can do to the plan is move the run onto
+#                 another plan this company already approved.
+#
+#   [[rule]]      Per tool, which origins an argument value may be drawn from, and what to
+#                 do when one is drawn from somewhere else.
+#
+# There is no setting for an unplanned step. That one is always a refusal, because a file
+# with a one-word way to switch it off is a file that will eventually have it switched off.
+
+#: Characters of shared text between an account record and an outgoing argument before the
+#: gate calls it PII leaving the building. A crude proxy: it will miss a paraphrase and it
+#: will fire on a long enough coincidence. The right version reads the account record's
+#: fields instead of its rendered text, and nothing in this package has them yet.
+pii_min_run = 24
+
+# ------------------------------------------------------------------ the plans
+
+[[workflow]]
+name = "duplicate-charge"
+steps = [
+  "get_ticket", "get_account", "get_invoice", "search_tickets",
+  "issue_refund", "post_ticket_reply", "close_ticket", "escalate_to_human",
+]
+
+[[workflow]]
+name = "billing-question"
+steps = [
+  "get_ticket", "get_account", "get_invoice", "search_kb",
+  "post_ticket_reply", "close_ticket", "escalate_to_human",
+]
+
+[[workflow]]
+name = "goodwill-credit"
+steps = [
+  "get_ticket", "get_account", "get_invoice",
+  "apply_credit", "post_ticket_reply", "close_ticket", "escalate_to_human",
+]
+
+[[workflow]]
+name = "triage-only"
+steps = ["get_ticket", "escalate_to_human"]
+
+# ------------------------------------------------------------------ the default
+
+# A read drawn from somewhere foreign escalates rather than refusing. The read itself is
+# not the harm; the run being steered by a knowledge-base article is, and that is worth a
+# person looking at it. Watch the proportion of these a reviewer approves unchanged. If it
+# sits near one hundred percent you have built a rubber stamp, which is Chapter 9's
+# warning arriving two chapters later in a new costume.
+
+[default]
+arguments_from = ["operator", "customer", "tool-result"]
+foreign = "escalate"
+pii_out = "refuse"
+tripwire = "refuse"
+
+# ------------------------------------------------------------------ the rules
+
+# Money moves. An invoice id the customer named is a request; one only an article named is
+# somebody else's request wearing the customer's ticket. An id named by both is ambiguous,
+# and for this tool ambiguity is refused rather than escalated, because the reviewer would
+# be asked to confirm a fact that nothing in the run can establish.
+
+[[rule]]
+tool = "issue_refund"
+arguments_from = ["operator", "customer", "tool-result"]
+foreign = "refuse"
+
+# The amount here is the model's to write, and Chapter 10 recorded why: a goodwill credit
+# is on no invoice. `model` is in the list for that reason and for no other. An amount the
+# model composed is allowed; the same amount, if a knowledge-base article named it first,
+# is drawn from `retrieved` and is refused. Chapter 9's bands still apply on top.
+
+[[rule]]
+tool = "apply_credit"
+arguments_from = ["operator", "customer", "tool-result", "model"]
+foreign = "refuse"
+
+# Quoting the knowledge base back to a customer is the job, so `retrieved` is permitted
+# here and nowhere else. The account record is not the knowledge base.
+
+[[rule]]
+tool = "post_ticket_reply"
+arguments_from = ["operator", "customer", "tool-result", "retrieved"]
+foreign = "refuse"
+pii_out = "refuse"
+
+# Chapter 9 left the escape hatch ungated and it stays ungated here. Whatever the system
+# does when it cannot proceed must not be reachable by the logic deciding it cannot
+# proceed. The colleague reading the reason needs the account details and the article's
+# own words, so both grounds that would refuse them are switched off for this tool alone.
+
+[[rule]]
+tool = "escalate_to_human"
+arguments_from = ["operator", "customer", "tool-result", "retrieved", "model"]
+foreign = "allow"
+pii_out = "allow"
+tripwire = "allow"
