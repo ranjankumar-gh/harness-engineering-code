@@ -1,0 +1,219 @@
+# The tool-safety matrix for the billing support agent.
+#
+# One row per tool, and one row is the whole truth about that tool. The description the
+# model reads is generated from here. The check the executor runs is generated from here.
+# The retry safety in Chapter 8 is read from here. Nothing about a tool is written down
+# twice, because anything written down twice eventually disagrees with itself.
+#
+# Rules this file follows:
+#   - Every parameter is the narrowest type that can carry the job. `text` is a last
+#     resort and carries a limit.
+#   - A write tool declares the scope of the credential it runs with. Not the process's
+#     credential. Its own.
+#   - `consequence` says where the number a gate thresholds on comes from. `invoice`
+#     means the ledger wrote it and the model only named the key.
+
+# ------------------------------------------------------------------- reads
+
+[[tool]]
+name = "search_tickets"
+summary = "Find tickets on this account by text and status."
+direction = "read"
+reversible = true
+idempotent = true
+scope = "support:ticket.read"
+modes = ["copilot", "queue-drain"]
+returns = ["ticket_id", "subject", "status"]
+returns_untrusted = true    # subjects are written by customers
+
+  [[tool.param]]
+  name = "query"
+  type = "text"
+  max_chars = 200
+
+  [[tool.param]]
+  name = "status"
+  type = "enum"
+  choices = ["open", "pending", "closed"]
+  required = false
+
+[[tool]]
+name = "get_ticket"
+summary = "Read one ticket, including the customer's own words."
+direction = "read"
+reversible = true
+idempotent = true
+scope = "support:ticket.read"
+modes = ["copilot", "queue-drain"]
+returns = ["ticket_id", "subject", "body", "author"]
+returns_untrusted = true    # Chapter 2: the body crosses the boundary
+
+  [[tool.param]]
+  name = "ticket_id"
+  type = "id"
+  pattern = "tkt_[0-9]{4,8}"
+
+[[tool]]
+name = "get_account"
+summary = "Read the account record."
+direction = "read"
+reversible = true
+idempotent = true
+scope = "billing:account.read"
+modes = ["copilot", "queue-drain"]
+returns = ["account_id", "plan", "status", "billing_contact"]
+returns_pii = true          # Chapter 6 redacts on this flag, not on a field-name list
+
+  [[tool.param]]
+  name = "account_id"
+  type = "id"
+  pattern = "acct_[0-9]{4,8}"
+
+[[tool]]
+name = "get_invoice"
+summary = "Read one invoice, including the amount actually billed."
+direction = "read"
+reversible = true
+idempotent = true
+scope = "billing:invoice.read"
+modes = ["copilot", "queue-drain"]
+returns = ["invoice_id", "account_id", "amount", "issued_at", "paid"]
+
+  [[tool.param]]
+  name = "invoice_id"
+  type = "id"
+  pattern = "inv_[0-9]{4,8}"
+
+[[tool]]
+name = "search_kb"
+summary = "Search the internal knowledge base."
+direction = "read"
+reversible = true
+idempotent = true
+scope = "kb:read"
+modes = ["copilot", "queue-drain"]
+returns = ["article_id", "title", "body"]
+returns_untrusted = true    # Chapter 11. Anyone with a wiki login writes this.
+
+  [[tool.param]]
+  name = "query"
+  type = "text"
+  max_chars = 200
+
+# ------------------------------------------------------------------ writes
+
+[[tool]]
+name = "post_ticket_reply"
+summary = "Post a reply the customer will read."
+direction = "write"
+reversible = false          # a customer has read it
+idempotent = false
+idempotency_key = true
+scope = "support:ticket.reply"
+modes = ["copilot", "queue-drain"]
+returns = ["reply_id"]
+
+  [[tool.param]]
+  name = "ticket_id"
+  type = "id"
+  pattern = "tkt_[0-9]{4,8}"
+
+  [[tool.param]]
+  name = "body"
+  type = "text"
+  max_chars = 4000          # the widest parameter in this file, and it faces outward
+
+[[tool]]
+name = "apply_credit"
+summary = "Credit the account. Reversible by counter-entry, and it leaves a trail."
+direction = "write"
+reversible = true
+idempotent = false
+idempotency_key = true
+scope = "billing:credit.write"
+modes = ["copilot", "queue-drain"]
+returns = ["credit_id", "applied_amount"]
+
+  [[tool.param]]
+  name = "account_id"
+  type = "id"
+  pattern = "acct_[0-9]{4,8}"
+
+  [[tool.param]]
+  name = "amount"
+  type = "money"
+
+  [[tool.param]]
+  name = "reason"
+  type = "enum"
+  choices = ["goodwill", "service_credit", "billing_error", "dispute"]
+
+  # The model writes this number. It cannot be narrowed away: a goodwill credit is not
+  # on any invoice, which is the whole point of it. So this tool keeps its comparator
+  # and its bands, and the matrix records that it earned them.
+  [tool.consequence]
+  source = "parameter"
+  name = "amount"
+
+[[tool]]
+name = "issue_refund"
+summary = "Refund an invoice in full to the account that paid it."
+direction = "write"
+reversible = false          # money leaves the company
+idempotent = false
+idempotency_key = true
+scope = "billing:refund.write"
+modes = ["copilot", "queue-drain"]
+returns = ["refund_id", "refunded_amount"]
+
+  # There is no amount parameter. Before this chapter there was, and the gate applied its
+  # bands to a number the model had written. The refund is now for the invoice, in full,
+  # and the amount is read from the ledger.
+  [[tool.param]]
+  name = "invoice_id"
+  type = "id"
+  pattern = "inv_[0-9]{4,8}"
+
+  [tool.consequence]
+  source = "invoice"
+  name = "invoice_id"
+
+[[tool]]
+name = "close_ticket"
+summary = "Close a ticket with a resolution code."
+direction = "write"
+reversible = true
+idempotent = true           # closing a closed ticket closes it
+scope = "support:ticket.write"
+modes = ["copilot", "queue-drain"]
+returns = ["ticket_id", "state"]
+
+  [[tool.param]]
+  name = "ticket_id"
+  type = "id"
+  pattern = "tkt_[0-9]{4,8}"
+
+  [[tool.param]]
+  name = "resolution"
+  type = "enum"
+  choices = ["resolved", "duplicate", "no_response", "escalated"]
+
+[[tool]]
+name = "escalate_to_human"
+summary = "Hand the ticket to a person and say why."
+direction = "write"
+reversible = true
+idempotent = false
+scope = "support:escalate"
+modes = ["copilot", "queue-drain"]
+returns = ["escalation_id"]
+
+  [[tool.param]]
+  name = "ticket_id"
+  type = "id"
+  pattern = "tkt_[0-9]{4,8}"
+
+  [[tool.param]]
+  name = "reason"
+  type = "text"
+  max_chars = 500           # read by a colleague, not by a customer

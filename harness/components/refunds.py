@@ -85,3 +85,30 @@ class ToolCallCeiling:
             raise BoundExceeded(
                 self.name, f"{run.budget.tool_calls} tool calls on run {run.run_id}"
             )
+
+
+@dataclass
+class InvoiceBelongsToAccount:
+    """Comparator. Chapter 10 replaces AmountOnInvoice for refunds with this.
+
+    Narrowing the signature did not remove the need for a check. It converted a judgement
+    into a lookup: "is this amount right" had no decidable answer, and "is this invoice
+    this account's" has one.
+    """
+
+    name: str = "invoice-belongs-to-account"
+    role: Role = Role.COMPARATOR
+    emits: str = "invoice_owned"
+
+    def compare(self, proposal: Proposal, run: RunContext[BillingFacts]) -> Verdict:
+        if proposal.tool != "issue_refund":
+            return Verdict(self.emits, True, "not a refund")
+        invoice_id = str(proposal.arguments.get("invoice_id", ""))
+        for invoice in run.facts.invoices:
+            if invoice.invoice_id == invoice_id:
+                return Verdict(self.emits, True, f"{invoice_id} is on this account")
+        return Verdict(
+            self.emits,
+            False,
+            f"{invoice_id} is on no invoice for {run.facts.account_id}",
+        )

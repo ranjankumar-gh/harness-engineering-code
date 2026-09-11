@@ -19,6 +19,7 @@ POLICY = GatePolicy.load(
 GATE = PolicyGate(POLICY)
 
 PASSED = {
+    "invoice_owned": Verdict("invoice_owned", True, "inv_9002 is on this account"),
     "amount_on_invoice": Verdict("amount_on_invoice", True, "matches inv_9002"),
     "structured_output": Verdict("structured_output", True, "parsed"),
 }
@@ -68,10 +69,19 @@ def test_a_thresholded_tool_with_no_amount_is_not_automatic() -> None:
 def test_a_failed_verdict_escalates_rather_than_refusing() -> None:
     """Chapter 7: a harness whose only answer to novelty is no gets switched off."""
     failed = dict(PASSED)
-    failed["amount_on_invoice"] = Verdict("amount_on_invoice", False, "on no invoice")
+    failed["invoice_owned"] = Verdict("invoice_owned", False, "on no invoice")
     d = decide("issue_refund", "940.00", Mode.QUEUE_DRAIN, failed)
     assert d.disposition is Disposition.ESCALATE
     assert "on no invoice" in d.reason
+
+
+def test_the_tool_that_kept_its_amount_kept_its_comparator() -> None:
+    """Chapter 10 narrowed issue_refund. apply_credit could not be narrowed, because a
+    goodwill credit is on no invoice, so it still takes a number the model wrote."""
+    failed = dict(PASSED)
+    failed["amount_on_invoice"] = Verdict("amount_on_invoice", False, "on no invoice")
+    d = decide("apply_credit", "940.00", Mode.QUEUE_DRAIN, failed)
+    assert d.disposition is Disposition.ESCALATE
 
 
 def test_an_amount_with_no_path_refuses_rather_than_escalating() -> None:
@@ -196,7 +206,7 @@ def test_refuse_and_escalate_take_different_edges() -> None:
     from harness.graph.gating import AWAITING_APPROVAL, build
 
     failed = dict(PASSED)
-    failed["amount_on_invoice"] = Verdict("amount_on_invoice", False, "on no invoice")
+    failed["invoice_owned"] = Verdict("invoice_owned", False, "on no invoice")
 
     escalated = run_in(Mode.COPILOT)
     escalated.proposal = Proposal("issue_refund", {"amount": "940.00"})
@@ -218,6 +228,6 @@ def test_an_escalated_run_is_marked_as_owing_a_human() -> None:
     run = run_in(Mode.QUEUE_DRAIN)
     run.proposal = Proposal("issue_refund", {"amount": "940.00"})
     failed = dict(PASSED)
-    failed["amount_on_invoice"] = Verdict("amount_on_invoice", False, "on no invoice")
+    failed["invoice_owned"] = Verdict("invoice_owned", False, "on no invoice")
     out = build(GATE, failed).invoke(run)
     assert out["band"] == AWAITING_APPROVAL

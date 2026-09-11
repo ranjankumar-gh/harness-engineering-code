@@ -9,6 +9,43 @@
 # ------------------------------------------------------------------ reads
 # Reversible, no amount, nothing to threshold. Code decides.
 
+# Chapter 10 added these four. The tool registry offered them in both modes and this
+# file had no rule for any of them, so under Chapter 9's fail-closed rule the agent could
+# read a ticket, reason about it perfectly, and then fail to close it. Two files listed
+# the same tools by hand and disagreed within one chapter of each other.
+
+[[rule]]
+tool = "search_tickets"
+mode = "copilot"
+
+[[rule]]
+tool = "search_tickets"
+mode = "queue-drain"
+
+[[rule]]
+tool = "get_ticket"
+mode = "copilot"
+
+[[rule]]
+tool = "get_ticket"
+mode = "queue-drain"
+
+[[rule]]
+tool = "get_account"
+mode = "copilot"
+
+[[rule]]
+tool = "get_account"
+mode = "queue-drain"
+
+[[rule]]
+tool = "close_ticket"
+mode = "copilot"
+
+[[rule]]
+tool = "close_ticket"
+mode = "queue-drain"
+
 [[rule]]
 tool = "get_invoice"
 mode = "copilot"
@@ -51,14 +88,18 @@ review_below = "1000.00"
 [[rule]]
 tool = "issue_refund"
 mode = "copilot"
-requires = ["amount_on_invoice", "structured_output"]
+requires = ["invoice_owned", "structured_output"]
 auto_below = "200.00"
 review_below = "2000.00"
 
 [[rule]]
 tool = "issue_refund"
 mode = "queue-drain"
-requires = ["amount_on_invoice", "structured_output"]
+# Chapter 10 narrowed issue_refund to an invoice id, so there is no amount for a
+# comparator to judge. amount_on_invoice is replaced by invoice_owned, which asks a
+# question with a decidable answer. The bands below now apply to the invoice's own
+# amount, read from the ledger, and not to a number the model wrote.
+requires = ["invoice_owned", "structured_output"]
 auto_below = "50.00"
 # No review band at all. Nobody is there to review, so an amount above the automatic
 # band has no path rather than a slow one. Expressed by absence: a review_below of
