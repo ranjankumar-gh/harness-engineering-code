@@ -333,6 +333,6 @@ def test_the_run_budget_stops_the_loop_before_the_attempt_limit() -> None:
     run: RunState[BillingFacts] = RunState(
         run_id="r3", mode=Mode.QUEUE_DRAIN, facts=BillingFacts("88421", "acct_4417")
     )
-    run.budget.tool_calls = POLICY.model_calls_per_run
+    run.budget.model_calls = POLICY.model_calls_per_run   # Chapter 13's name for it
     out = build(POLICY, always_503, READ, sleep=lambda _ms: None).invoke(run)
     assert out["band"] == EXHAUSTED, "the run budget wins over the per-call attempts"

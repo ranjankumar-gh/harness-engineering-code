@@ -80,6 +80,13 @@ why = """A bound that resets on restart is not a bound. This rule is the one tha
 code: every counter change has to go through the state channel, because a nested
 mutation reaches SqliteSaver and never reaches Postgres."""
 
+[[field]]
+name = "spend"
+restore = "restored"
+why = """Chapter 13. The journal the budget is folded from, and the only record of which
+component spent it. Restored for the same reason as budget, and restored with it: a
+budget that comes back without its journal can no longer be checked against it."""
+
 # -------------------------------------------------------------- the nodes
 
 [[node]]

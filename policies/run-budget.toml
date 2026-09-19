@@ -1,0 +1,168 @@
+# The budget config for the billing support agent. Chapter 13.
+#
+# A run grows in three directions: what it spends, how many steps it takes in a row, and
+# how many it takes at once. Every ceiling here is checked against the next unit's worst
+# case before that unit is spent. A ceiling checked afterwards is a receipt.
+#
+# Every limit carries a why. The loader refuses one without, because a limit nobody can
+# explain is a limit nobody can safely raise at 02:00.
+
+# ------------------------------------------------------------------ prices
+#
+# Data with a date. A price change is a plant change: every cost ceiling below was set
+# against these numbers, and the loader refuses a table with no verified date.
+[prices]
+verified = 2026-09-19
+source = "https://platform.claude.com/docs/en/about-claude/pricing"
+
+[[price]]
+model = "claude-sonnet-5"
+input_per_mtok = "2.00"
+output_per_mtok = "10.00"
+
+[[price]]
+model = "claude-haiku-4-5"
+input_per_mtok = "1.00"
+output_per_mtok = "5.00"
+
+# ------------------------------------------------------------- call shapes
+#
+# The largest call each node can make. The worst case is read from here, never from the
+# call, because a reservation happens before there is a call to read.
+
+[[call]]
+node = "propose"
+model = "claude-sonnet-5"
+max_tokens_in = 28000     # Chapter 5's window: 32000, less the 4000 reserved for output
+max_tokens_out = 4000
+
+[[call]]
+node = "judge"
+model = "claude-haiku-4-5"
+max_tokens_in = 2000      # one invoice and the question about it
+max_tokens_out = 200
+
+# ------------------------------------------------------------ run ceilings
+
+[[ceiling]]
+meter = "model_calls"
+scope = "run"
+mode = "queue-drain"
+limit = 20
+why = """Chapter 8's number, and it must stay Chapter 8's number: the startup check
+compares the two files. Retries, repairs and fan-out branches all spend it."""
+
+[[ceiling]]
+meter = "cost"
+scope = "run"
+mode = "queue-drain"
+limit = "1.50"
+why = """One worst-case proposal is twelve calls of up to 0.096 each: 1.152. A ceiling
+set from what ordinary runs spend looks generous and cannot pay for the repair ladder."""
+
+[[ceiling]]
+meter = "tool_calls"
+scope = "run"
+mode = "queue-drain"
+limit = 30
+why = """Every lookup in a fan-out is a tool call, so this sits above the widest fan-out
+plus the writes that follow it."""
+
+[[ceiling]]
+meter = "depth"
+scope = "run"
+mode = "queue-drain"
+limit = 16
+why = """Steps in a row. LangGraph's recursion limit is derived from this, three
+above it: this bound fires first and says why, and the run can still escalate."""
+
+[[ceiling]]
+meter = "width"
+scope = "run"
+mode = "queue-drain"
+limit = 24
+why = """Branches opened across the whole run, not per node: two fan-outs of 20 each
+are 40 lookups whatever each node's own limit says."""
+
+[[ceiling]]
+meter = "model_calls"
+scope = "run"
+mode = "copilot"
+limit = 20
+why = "Chapter 8's number, as overnight. A person present does not make calls free."
+
+[[ceiling]]
+meter = "cost"
+scope = "run"
+mode = "copilot"
+limit = "1.50"
+why = "The same worst-case proposal as queue-drain."
+
+[[ceiling]]
+meter = "tool_calls"
+scope = "run"
+mode = "copilot"
+limit = 30
+why = "As queue-drain."
+
+[[ceiling]]
+meter = "depth"
+scope = "run"
+mode = "copilot"
+limit = 24
+why = """Longer than overnight: a person can ask for one more step, and each approval
+wait is a step."""
+
+[[ceiling]]
+meter = "width"
+scope = "run"
+mode = "copilot"
+limit = 24
+why = "As queue-drain. Width is a cost question, and the cost does not change by day."
+
+# ---------------------------------------------------------- tool ceilings
+#
+# The count and the total per run. The worst single amount is not declared here: it is
+# the largest amount the gate policy lets through, so the two files cannot disagree.
+
+[[tool]]
+tool = "issue_refund"
+mode = "queue-drain"
+max_count = 3
+max_total = "150.00"
+why = """Each refund below 50.00 passes the gate on its own. Nothing in the gate can see
+the other refunds in the same run, which is why this exists."""
+
+[[tool]]
+tool = "issue_refund"
+mode = "copilot"
+max_count = 5
+max_total = "5000.00"
+why = """A person approves anything above 200.00, but approving five in a row is still
+five, and this is what makes the sixth a conversation."""
+
+# ---------------------------------------------------------------- fan-out
+
+[[fanout]]
+node = "lookup"
+branch = "judge"          # each branch makes one judge call
+tools_per_branch = 1      # and one get_invoice
+max_width = 16
+why = """A customer chooses this number by how many invoices they list, so it is
+untrusted input setting a multiplier. The first draft said 24, which could never be
+reached: 24 judge calls do not fit under 20. Sixteen leaves the propose call and
+three retries inside Chapter 8's number."""
+
+# ------------------------------------------------------------------ fleet
+
+[fleet]
+window_hours = 12         # one night of queue-drain
+hold_minutes = 30         # a run holding budget longer than this is presumed dead
+
+[[ceiling]]
+meter = "cost"
+scope = "fleet"
+mode = "queue-drain"
+limit = "120.00"
+why = """The night's model spend across every run. Each run reserves its own ceiling
+on the way in, so this divided by 1.50 is how many runs may be in flight at once."""

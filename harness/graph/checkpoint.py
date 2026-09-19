@@ -86,7 +86,9 @@ def make_propose_node(propose: Propose) -> Any:
     def node(state: RunState[Any]) -> dict[str, Any]:
         return {
             "proposal": propose(state),
-            "budget": replace(state.budget, tokens_out=state.budget.tokens_out + 1),
+            # Chapter 13: a proposal is one model call. It used to add one to
+            # tokens_out, which counted proposals in a field named for tokens.
+            "budget": replace(state.budget, model_calls=state.budget.model_calls + 1),
         }
 
     return node

@@ -14,7 +14,7 @@ from harness.resilience import (
     ToolRetrySafety,
     may_retry,
 )
-from harness.state import RunState
+from harness.state import RunState, Spend
 
 DEGRADED = "degraded"
 EXHAUSTED = "exhausted"
@@ -37,15 +37,23 @@ def make_call_node(
     """The retry loop lives here, not in the graph. Sleeping is injected so it is testable."""
 
     def call(state: RunState[Any]) -> dict[str, Any]:
+        # Chapter 13 moved this counter onto the channel and under its own name. It was
+        # `state.budget.tool_calls += 1`: the wrong counter, and a nested mutation that
+        # Chapter 12 showed reaches SqliteSaver and never reaches Postgres.
+        spent: list[Spend] = []
+
+        def paid() -> dict[str, Any]:
+            return {"spend": tuple(spent), "budget": state.budget.after(*spent)}
+
         for attempt in range(1, policy.retry.max_attempts + 1):
-            if state.budget.tool_calls >= policy.model_calls_per_run:
-                return {"band": EXHAUSTED, "budget": state.budget}
+            if state.budget.model_calls + len(spent) >= policy.model_calls_per_run:
+                return {**paid(), "band": EXHAUSTED}
 
             outcome = invoke(state, attempt)
-            state.budget.tool_calls += 1                              # <1>
+            spent.append(Spend("retry", model_calls=1))
 
             if outcome.ok:
-                return {"budget": state.budget}
+                return paid()
 
             assert outcome.kind is not None
             allowed, _reason = may_retry(policy.retry, outcome.kind, safety)
@@ -54,7 +62,7 @@ def make_call_node(
             if attempt < policy.retry.max_attempts:
                 sleep(policy.retry.backoff_ms(attempt))
 
-        return {"band": DEGRADED, "budget": state.budget}
+        return {**paid(), "band": DEGRADED}
 
     return call
 
