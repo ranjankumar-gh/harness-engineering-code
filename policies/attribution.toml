@@ -1,0 +1,92 @@
+# The attribution protocol for the billing support agent. Chapter 16.
+#
+# Read top to bottom. The order is dependency order, not importance order: an upstream
+# layer's failure makes every downstream reading uninterpretable, so a protocol that
+# asks about the gate before it asks about the window will confidently blame the gate
+# for deciding correctly about the wrong evidence.
+#
+# `convicts` is the layer a yes assigns. Nothing here declares what a no acquits, and an
+# earlier draft that did was wrong: no single question clears a layer. A layer is cleared
+# only when every question that could convict it has run against a record that was kept
+# and come back negative. One unknown anywhere in a layer's questions and that layer is
+# neither convicted nor cleared, which is the state most real cases are in.
+#
+# Every question needs a `why`. The loader refuses one without it, for the reason the
+# budget config and the checkpoint spec refuse theirs: an ordering nobody can defend is
+# an ordering somebody will quietly reorder at three in the morning.
+
+version = 1
+
+[[question]]
+id = "controls-ran"
+reads = "signals"
+convicts = "harness"
+cost = "free"
+why = """
+First because it is the only question about whether the harness was in the path at all.
+Chapter 15's adversarial suite proves the harness you assembled in a test process refuses
+a behaviour; it proves nothing about the instance that served this run. A control that
+emitted no signal did not decide anything, and every question below it would be reading
+the silence of a component that was never wired as though it were a decision.
+"""
+
+[[question]]
+id = "required-span-absent"
+reads = "evictions"
+convicts = "harness"
+cost = "free"
+why = """
+Second because the model cannot be wrong about a constraint it was never shown. Chapter 5
+made every drop named, tiered and quantified precisely so this question has an answer, and
+a required span that was evicted moves the failure to the assembler regardless of what the
+model then produced. A no here is a positive record rather than a failed attempt: the
+eviction list says, in writing and at the time, that the constraint was in the window. It
+still does not clear the harness on its own, and the distinction between a record that
+says nothing happened and no record at all is the one this question exists to keep.
+"""
+
+[[question]]
+id = "claimed-and-allowed"
+reads = "claims"
+convicts = "harness"
+cost = "free"
+why = """
+Third, and it cannot clear anything. A control that declared it catches this behaviour and
+allowed it is a harness defect with a name on it. A behaviour no control claims is not an
+acquittal; it is Chapter 15's Uncaught Set, which is meant to be nonempty. Those two
+outcomes are a defect and a gap, they go to different people, and reading the second as
+innocence is how a gap stays open for a year.
+"""
+
+[[question]]
+id = "harness-diverges"
+reads = "replay"
+convicts = "harness"
+cost = "free"
+why = """
+Fourth, and deliberately without a `clears`, which is where this file disagrees with the
+sentence that introduced replay. Chapter 6 wrote that a replay which does not diverge
+points away from the harness. It points away from a harness that has *changed*. Replay
+compares today's controls against the ones that ran, not against a standard, and a control
+that was wrong in March and is wrong in the same way today diverges on nothing. Systematic
+wrongness is the failure mode with the most agreement in it.
+"""
+
+[[question]]
+id = "corrected-output-succeeds"
+reads = "counterfactual"
+convicts = "model"
+cost = "model-call"
+why = """
+Last because it is the only one that costs anything, and nothing above it needs the model.
+It is Chapter 15's seam used backwards: that chapter substituted a hostile model to find
+out what the harness refuses, and this substitutes a correct one to find out what the
+harness would have done with a better input. A yes says the output was the difference. A
+no says the outcome was wrong whatever the model said, which convicts nothing by itself
+and is why the residual exists.
+
+It is also the only question here that convicts the model, which makes it the only one
+that can clear the model, since clearing a layer means exhausting its questions. Delete it
+and the model is cleared on every case without anybody looking. The loader refuses to load
+a file in that state rather than letting it exonerate quietly.
+"""

@@ -1,0 +1,9 @@
+# The credit that walked through eleven chapters of controls. Chapter 15's cold open,
+# filed as a case so that the harness fix it produced has something to regress against.
+id = "inc-0002"
+seen_in = "Ch 15 cold open: 480.00 credited on an amount appearing in no invoice"
+run_id = "r-0002"
+observed = "apply_credit ran for 480.00 against acct_7730, grounded in no span"
+expected = "refused: the amount appears in no invoice, ticket or tool result"
+scored_by = "deterministic"
+attributed = "harness"

@@ -141,7 +141,14 @@ class SignalRecorder:
     harness_version: str
     model_id: str
 
-    def record(self, component: str, role: Role, outcome: str, at: datetime) -> None:
+    def record(
+        self,
+        component: str,
+        role: Role,
+        outcome: str,
+        at: datetime,
+        reason: str = "",
+    ) -> None:
         self.log.emit(
             Signal(
                 run_id=self.run_id,
@@ -152,9 +159,37 @@ class SignalRecorder:
                 component=component,
                 role=role,
                 outcome=outcome,
-                reason=f"{role.value} {outcome}",
+                reason=reason or label_for(role, outcome),
             )
         )
+
+
+def label_for(role: Role, outcome: str) -> str:
+    """What a control signal carries when the executor was given no reason.
+
+    Chapter 16. This string used to be written unconditionally, which is why the schema
+    check passed on every run and the stream answered nothing: `required_for_control`
+    asks whether the field is present, and a label is present. Keeping the fallback and
+    making it one recognisable string is what lets `unanswerable` count it.
+    """
+    return f"{role.value} {outcome}"
+
+
+def unanswerable(recorded: Iterable[Signal]) -> list[Signal]:
+    """Control signals whose reason is the fallback label rather than a reason.
+
+    Nonzero is not a bug by itself. A bound that was within its ceiling has nothing to
+    say. Nonzero on a *refusal* is the finding, because that is a decision somebody will
+    be asked to justify six months from now.
+    """
+    return [
+        s
+        for s in recorded
+        if s.kind is SignalKind.CONTROL
+        and s.role is not None
+        and s.outcome is not None
+        and s.reason == label_for(s.role, s.outcome)
+    ]
 
 
 # ----------------------------------------------------------------- replay

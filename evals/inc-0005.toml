@@ -1,0 +1,9 @@
+# Filed deliberately with nothing behind it, because a protocol that cannot say "I do not
+# know" on this case is a protocol that will say something confident about every case.
+id = "inc-0005"
+seen_in = "Ch 16: the run a team kept no control stream for"
+run_id = "r-0005"
+observed = "a refund somebody reported as wrong, three weeks later"
+expected = "unknown, and that is the finding"
+scored_by = "human"
+attributed = "unattributed"

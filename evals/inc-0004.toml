@@ -1,0 +1,9 @@
+# Every layer correct over its own unit, and the outcome wrong. The shape the author's
+# LangGraph audit calls a Scope-Blind Guarantee.
+id = "inc-0004"
+seen_in = "Ch 14 dead_windows: the gate allows an automatic 200.00 that no unattended band reaches"
+run_id = "r-0004"
+observed = "a refund inside every per-action limit, in a run that finished unattended"
+expected = "refused or escalated once the reviewer became unreachable"
+scored_by = "human"
+attributed = "interaction"

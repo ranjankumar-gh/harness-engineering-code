@@ -189,13 +189,37 @@ class HarnessRegistry(Generic[FactsT]):
 
 
 class Recorder(Protocol):
-    """Where the executor writes evidence that a control did something. Chapter 17."""
+    """Where the executor writes evidence that a control did something. Chapter 17.
 
-    def record(self, component: str, role: Role, outcome: str, at: datetime) -> None: ...
+    `reason` is Chapter 16, and it is late. The protocol had four parameters and none of
+    them was why, so the executor discarded every `decision.reason` it had just read and
+    the stream recorded a label in the reason field instead of a reason. The signal
+    schema requires the field and cannot tell the two apart.
+
+    It defaults to empty because one caller genuinely has nothing to say: a bound that
+    was within its ceiling returns None, by Chapter 3's design, so there is no detail to
+    pass on. `signals.unanswerable` counts those rather than hiding them.
+    """
+
+    def record(
+        self,
+        component: str,
+        role: Role,
+        outcome: str,
+        at: datetime,
+        reason: str = "",
+    ) -> None: ...
 
 
 class _NullRecorder:
-    def record(self, component: str, role: Role, outcome: str, at: datetime) -> None:
+    def record(
+        self,
+        component: str,
+        role: Role,
+        outcome: str,
+        at: datetime,
+        reason: str = "",
+    ) -> None:
         return None
 
 
@@ -241,11 +265,15 @@ class Harness(Generic[FactsT]):
                 continue
             try:
                 verdict = comparator.compare(subject, run)
-            except Exception:
-                self._recorder.record(comparator.name, Role.COMPARATOR, "raised", at)
+            except Exception as exc:
+                self._recorder.record(
+                    comparator.name, Role.COMPARATOR, "raised", at, repr(exc)
+                )
                 raise
             outcome = "passed" if verdict.passed else "failed"
-            self._recorder.record(comparator.name, Role.COMPARATOR, outcome, at)
+            self._recorder.record(
+                comparator.name, Role.COMPARATOR, outcome, at, verdict.detail
+            )
             verdicts[comparator.emits] = verdict
         return verdicts
 
@@ -262,12 +290,14 @@ class Harness(Generic[FactsT]):
         for bound in self._registry.bounds:
             try:
                 bound.check(run)
-            except BoundExceeded:
-                self._recorder.record(bound.name, Role.BOUND, "exceeded", at)
+            except BoundExceeded as exc:
+                self._recorder.record(bound.name, Role.BOUND, "exceeded", at, exc.detail)
                 raise
-            except Exception:
-                self._recorder.record(bound.name, Role.BOUND, "raised", at)
+            except Exception as exc:
+                self._recorder.record(bound.name, Role.BOUND, "raised", at, repr(exc))
                 raise
+            # No reason, and none available: `check` returns None on success. Chapter 3
+            # chose that so no caller could ignore a bound, and this is the bill.
             self._recorder.record(bound.name, Role.BOUND, "within", at)
 
         verdicts: dict[str, Verdict] = dict(prior or {})
@@ -294,13 +324,17 @@ class Harness(Generic[FactsT]):
                 )
             try:
                 decision = gate.decide(subject, run, verdicts)
-            except Exception:
-                self._recorder.record(gate.name, Role.GATE, "raised", at)
+            except Exception as exc:
+                self._recorder.record(gate.name, Role.GATE, "raised", at, repr(exc))
                 raise
             run.record(gate.name, decision.disposition.value, decision.reason)
             allowed = decision.disposition is Disposition.ALLOW
             self._recorder.record(
-                gate.name, Role.GATE, "allowed" if allowed else "refused", at
+                gate.name,
+                Role.GATE,
+                "allowed" if allowed else "refused",
+                at,
+                decision.reason,
             )
             if not allowed:
                 raise Refused(gate.name, decision.disposition.value, decision.reason)

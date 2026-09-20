@@ -63,7 +63,17 @@ class ExerciseLog:
                 log.record(s.component, s.role, s.outcome, s.at)
         return log
 
-    def record(self, component: str, role: Role, outcome: str, at: datetime) -> None:
+    def record(
+        self,
+        component: str,
+        role: Role,
+        outcome: str,
+        at: datetime,
+        reason: str = "",
+    ) -> None:
+        # `reason` arrives because Chapter 16 widened the Recorder protocol, and is
+        # dropped here deliberately: this log answers whether a control fired, never
+        # why. Chapter 6's stream keeps the why, and it is the same event.
         self._entries.append(Exercise(component, role, Outcome(outcome), at))
 
     def __len__(self) -> int:
