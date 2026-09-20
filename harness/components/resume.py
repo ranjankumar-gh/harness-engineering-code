@@ -11,6 +11,7 @@ from dataclasses import dataclass, field
 from typing import Callable, Mapping, Protocol
 
 from harness.checkpoint import CheckpointSpec, EffectLog, Outcome, Replay, fingerprint
+from harness.adversary import Hostile
 from harness.errors import BoundExceeded, HarnessError
 from harness.roles import Role
 
@@ -48,6 +49,7 @@ class ReplayBound:
     pending: tuple[str, ...] = ()
     name: str = "replay-bound"
     role: Role = Role.BOUND
+    catches: frozenset[Hostile] = frozenset({Hostile.REPLAYED_EFFECT})
 
     def check(self, run: HasRunId) -> None:
         for node in self.pending:

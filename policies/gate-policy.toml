@@ -65,18 +65,26 @@ mode = "queue-drain"
 # ------------------------------------------------------------- reversible writes
 # apply_credit is reversible by counter-entry and leaves an audit trail, so the bands
 # are wider than a refund's. It is still not unlimited.
+#
+# Chapter 15 replaced amount_on_invoice with amounts_grounded on both rules. Chapter 10
+# narrowed issue_refund to an invoice id, which left apply_credit as the one write whose
+# amount the model still writes freely. The comparator this rule required, though, runs
+# only on refunds: it returned "not a refund" for every credit, so the requirement was
+# met by a verdict that had not looked, and on the refund it does run against it raised
+# KeyError, because Chapter 10 had removed the parameter it reads. Neither was visible
+# until the controls were registered together.
 
 [[rule]]
 tool = "apply_credit"
 mode = "copilot"
-requires = ["amount_on_invoice"]
+requires = ["amounts_grounded"]
 auto_below = "500.00"
 review_below = "5000.00"
 
 [[rule]]
 tool = "apply_credit"
 mode = "queue-drain"
-requires = ["amount_on_invoice"]
+requires = ["amounts_grounded"]
 auto_below = "100.00"
 review_below = "1000.00"
 

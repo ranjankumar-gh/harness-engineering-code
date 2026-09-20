@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from harness.ceilings import RunBudgetConfig, admit_fanout, reading, reserve
+from harness.adversary import Hostile
 from harness.errors import BoundExceeded
 from harness.gates import GatePolicy
 from harness.roles import Role
@@ -26,6 +27,7 @@ class RunCeilings:
     policy: GatePolicy
     name: str = "run-ceilings"
     role: Role = Role.BOUND
+    catches: frozenset[Hostile] = frozenset({Hostile.SPLIT_ACROSS_CALLS})
 
     def check(self, run: RunContext[Any]) -> None:
         for c in self.config.for_band(run.band):

@@ -64,6 +64,25 @@ class InboundRequest:
 
 
 @dataclass(frozen=True)
+class Draft:
+    """The third subject: raw model output, before anything has parsed it. Chapter 15.
+
+    Chapter 9 generalised gates from `Proposal` to `Subject` because a request is a
+    subject too. The same gap existed one role over and nobody found it, because the
+    comparator that judges raw text was never registered: a schema check runs before a
+    proposal exists, so it could not satisfy a protocol that took one.
+    """
+
+    text: str
+    name: str = "model-output"
+    kind: str = "draft"
+
+    @property
+    def arguments(self) -> Mapping[str, object]:
+        return {"text": self.text}
+
+
+@dataclass(frozen=True)
 class Plan:
     """The steps this run may take, fixed before any untrusted text reached the model.
 

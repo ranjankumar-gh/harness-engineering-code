@@ -8,7 +8,7 @@ from enum import Enum
 from typing import Any, Callable, Generic, Mapping, Protocol, TypeVar, runtime_checkable
 
 from harness.boundary import Context
-from harness.errors import BoundExceeded, OpenLoopError, Refused
+from harness.errors import BoundExceeded, HarnessError, OpenLoopError, Refused
 from harness.state import Proposal, RunContext, RunState, Subject
 
 FactsT = TypeVar("FactsT")
@@ -72,8 +72,12 @@ class Comparator(Protocol[FactsT]):
     name: str
     role: Role
     emits: str
+    #: Which `Subject.kind` this comparator reads. Chapter 15. Without it the executor
+    #: hands every comparator every subject, and a schema check receives a proposal
+    #: whose text field does not exist.
+    judges: str
 
-    def compare(self, proposal: Proposal, run: RunContext[FactsT]) -> Verdict: ...
+    def compare(self, subject: Subject, run: RunContext[FactsT]) -> Verdict: ...
 
 
 @runtime_checkable
@@ -81,6 +85,11 @@ class Gate(Protocol[FactsT]):
     name: str
     role: Role
     consumes: frozenset[str]
+    #: Chapter 15. Same declaration the comparators carry, for the same reason: four
+    #: gates on one path do not all decide about the same object. Admission decides
+    #: about the proposal the model wrote; the policy gate decides about the
+    #: consequence, whose amount came from the ledger.
+    judges: str
 
     def decide(
         self,
@@ -199,6 +208,7 @@ class Harness(Generic[FactsT]):
         tools: Mapping[str, Callable[..., object]],
         recorder: Recorder | None = None,
         clock: Callable[[], datetime] | None = None,
+        subject_of: Callable[[Proposal], Subject] | None = None,
     ) -> None:
         registry.assert_closed()
         self._registry = registry
@@ -209,8 +219,44 @@ class Harness(Generic[FactsT]):
         self._clock: Callable[[], datetime] = (
             (lambda: datetime.now(timezone.utc)) if clock is None else clock
         )
+        # Chapter 15. What the controls decide about is not always the proposal: Chapter
+        # 10 wraps it in a Consequence so the gate thresholds the ledger's amount rather
+        # than the model's. That wrapping lived in the graph layer, so the executor
+        # would have quietly undone it. Identity by default.
+        self._subject_of: Callable[[Proposal], Subject] = (
+            (lambda p: p) if subject_of is None else subject_of
+        )
 
-    def act(self, proposal: Proposal, run: RunState[FactsT]) -> object:
+    def judge(self, subject: Subject, run: RunState[FactsT]) -> dict[str, Verdict]:
+        """Every verdict from the comparators that read this kind of subject.
+
+        Chapter 15. A verdict outlives the call that produced it: the schema verdict is
+        made against raw text and read by a gate deciding about a proposal, two stages
+        later. So it is returned rather than kept, and the caller carries it forward.
+        """
+        at = self._clock()
+        verdicts: dict[str, Verdict] = {}
+        for comparator in self._registry.comparators:
+            if comparator.judges != subject.kind:
+                continue
+            try:
+                verdict = comparator.compare(subject, run)
+            except Exception:
+                self._recorder.record(comparator.name, Role.COMPARATOR, "raised", at)
+                raise
+            outcome = "passed" if verdict.passed else "failed"
+            self._recorder.record(comparator.name, Role.COMPARATOR, outcome, at)
+            verdicts[comparator.emits] = verdict
+        return verdicts
+
+    def act(
+        self,
+        proposal: Proposal,
+        run: RunState[FactsT],
+        prior: Mapping[str, Verdict] | None = None,
+    ) -> object:
+        """`prior` carries verdicts made at an earlier stage. Forgetting it fails
+        closed: Chapter 9's gate refuses a rule whose required verdict is absent."""
         at = self._clock()
 
         for bound in self._registry.bounds:
@@ -224,20 +270,30 @@ class Harness(Generic[FactsT]):
                 raise
             self._recorder.record(bound.name, Role.BOUND, "within", at)
 
-        verdicts: dict[str, Verdict] = {}
-        for comparator in self._registry.comparators:
-            try:
-                verdict = comparator.compare(proposal, run)
-            except Exception:
-                self._recorder.record(comparator.name, Role.COMPARATOR, "raised", at)
-                raise
-            outcome = "passed" if verdict.passed else "failed"
-            self._recorder.record(comparator.name, Role.COMPARATOR, outcome, at)
-            verdicts[comparator.emits] = verdict
+        verdicts: dict[str, Verdict] = dict(prior or {})
+        verdicts.update(self.judge(proposal, run))
+
+        # The consequence is resolved lazily, at the first gate that asks for one.
+        # Resolving it means parsing a value the model wrote, and doing that eagerly
+        # puts the parse in front of the gate whose job is to refuse a malformed
+        # argument: an amount of "inv_9002" raises InvalidOperation in the resolver
+        # instead of being refused by name in admission.
+        consequence: Subject | None = None
 
         for gate in self._registry.gates:
+            if gate.judges == "proposal":
+                subject: Subject = proposal
+            elif gate.judges == "consequence":
+                if consequence is None:
+                    consequence = self._subject_of(proposal)
+                    verdicts.update(self.judge(consequence, run))
+                subject = consequence
+            else:
+                raise HarnessError(
+                    f"{gate.name} decides about a {gate.judges}, and this call has none"
+                )
             try:
-                decision = gate.decide(proposal, run, verdicts)
+                decision = gate.decide(subject, run, verdicts)
             except Exception:
                 self._recorder.record(gate.name, Role.GATE, "raised", at)
                 raise

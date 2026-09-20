@@ -10,6 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Mapping, Protocol
 
+from harness.adversary import Hostile
 from harness.boundary import Context, Origin, Span
 from harness.merge import Ground, Marking, MergePolicy, MergeRule
 from harness.roles import Decision, Disposition, Role, Verdict
@@ -165,6 +166,11 @@ class MergeGate:
     name: str = "merge-gate"
     role: Role = Role.GATE
     consumes: frozenset[str] = frozenset()
+    judges: str = "proposal"
+    catches: frozenset[Hostile] = frozenset({
+        Hostile.UNPLANNED_STEP,
+        Hostile.COPIED_ARGUMENT,
+    })
     unchecked: frozenset[ParamType] = UNCHECKED_TYPES
 
     @property

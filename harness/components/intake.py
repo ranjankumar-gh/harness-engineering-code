@@ -101,6 +101,7 @@ class AdmissionGate:
     policy: InputPolicy
     name: str = "admission-gate"
     role: Role = Role.GATE
+    judges: str = "request"
 
     def admit(self, raw: Mapping[str, str]) -> None:
         total = 0

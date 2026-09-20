@@ -77,9 +77,15 @@ def test_a_failed_verdict_escalates_rather_than_refusing() -> None:
 
 def test_the_tool_that_kept_its_amount_kept_its_comparator() -> None:
     """Chapter 10 narrowed issue_refund. apply_credit could not be narrowed, because a
-    goodwill credit is on no invoice, so it still takes a number the model wrote."""
+    goodwill credit is on no invoice, so it still takes a number the model wrote.
+
+    Chapter 15 changed which comparator guards it. amount_on_invoice only ever ran on
+    refunds, so the requirement was met by a verdict that had not looked; the question
+    a credit can actually be asked is whether its amount appeared anywhere the system
+    was shown.
+    """
     failed = dict(PASSED)
-    failed["amount_on_invoice"] = Verdict("amount_on_invoice", False, "on no invoice")
+    failed["amounts_grounded"] = Verdict("amounts_grounded", False, "appears nowhere")
     d = decide("apply_credit", "940.00", Mode.QUEUE_DRAIN, failed)
     assert d.disposition is Disposition.ESCALATE
 
@@ -157,7 +163,7 @@ def test_a_proposal_and_a_request_report_different_kinds() -> None:
 def test_the_gate_declares_every_verdict_any_rule_needs() -> None:
     """So Chapter 3's check_closure covers all of them, not just the first."""
     assert GATE.consumes == POLICY.required_verdicts
-    assert "amount_on_invoice" in GATE.consumes
+    assert "amounts_grounded" in GATE.consumes
     assert "structured_output" in GATE.consumes
 
 

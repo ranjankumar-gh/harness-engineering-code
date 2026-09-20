@@ -9,9 +9,10 @@ from decimal import Decimal, InvalidOperation
 from typing import Callable, Protocol
 
 from harness.boundary import Context, Origin
+from harness.adversary import Hostile
 from harness.repair import RepairLadder, Rung
 from harness.roles import Correction, Observation, Role, Verdict
-from harness.state import Proposal, RunContext
+from harness.state import Proposal, RunContext, Subject
 
 
 class HasContext(Protocol):
@@ -52,6 +53,19 @@ class StructuredOutput:
     name: str = "structured-output"
     role: Role = Role.COMPARATOR
     emits: str = "structured_output"
+    #: Chapter 15. This is the comparator that could not be registered: it judges raw
+    #: text, and the protocol took a proposal, which does not exist yet at this stage.
+    judges: str = "draft"
+    catches: frozenset[Hostile] = frozenset({
+        Hostile.FENCED,
+        Hostile.TRAILING_COMMA,
+        Hostile.PROSE,
+    })
+
+    def compare(self, subject: Subject, run: object = None) -> Verdict:
+        """Chapter 15. Four lines, exactly like Chapter 9's gate generalisation: the
+        subject is unwrapped and the body below is untouched."""
+        return self.check(str(subject.arguments.get("text", "")))
 
     def check(self, text: str) -> Verdict:
         try:
@@ -110,9 +124,11 @@ class AmountsGrounded:
     name: str = "amounts-grounded"
     role: Role = Role.COMPARATOR
     emits: str = "amounts_grounded"
+    judges: str = "proposal"
+    catches: frozenset[Hostile] = frozenset({Hostile.UNGROUNDED_AMOUNT})
 
-    def compare(self, proposal: Proposal, run: HasContext) -> Verdict:
-        claimed = self._amounts(str(proposal.arguments.get("amount", "")))
+    def compare(self, subject: Subject, run: HasContext) -> Verdict:
+        claimed = self._amounts(str(subject.arguments.get("amount", "")))
         if not claimed:
             return Verdict(self.emits, True, "no amount claimed")
 

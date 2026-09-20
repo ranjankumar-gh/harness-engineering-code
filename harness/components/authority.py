@@ -20,6 +20,7 @@ from harness.authority import (
     permits,
     width,
 )
+from harness.adversary import Hostile
 from harness.errors import BoundExceeded
 from harness.gates import GatePolicy
 from harness.roles import Decision, Disposition, Role, Verdict
@@ -40,6 +41,10 @@ class BandIntegrity:
     evidence_of: Callable[[RunContext[Any]], Evidence]
     name: str = "band-integrity"
     role: Role = Role.BOUND
+    #: Chapter 15. Also empty, and for the reason Chapter 3 gave: a bound never reads
+    #: the proposal, so it holds against behaviours nobody enumerated. The Uncaught Set
+    #: is where bounds earn their keep, not a hole in the coverage.
+    catches: frozenset[Hostile] = frozenset()
 
     def check(self, run: RunContext[Any]) -> None:
         supported, why = self.table.resolve(run.mode.value, self.evidence_of(run))
@@ -65,6 +70,8 @@ class BandGate:
     name: str = "band-gate"
     role: Role = Role.GATE
     consumes: frozenset[str] = frozenset()
+    judges: str = "proposal"
+    catches: frozenset[Hostile] = frozenset({Hostile.OVER_BAND})
 
     def decide(
         self,

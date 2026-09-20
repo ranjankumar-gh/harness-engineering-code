@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from decimal import Decimal
 from typing import Callable, Mapping, Protocol
 
+from harness.adversary import Hostile
 from harness.roles import Decision, Disposition, Role, Verdict
 from harness.state import Mode, Subject
 from harness.tools import ToolRegistry, ToolSpec
@@ -37,7 +38,10 @@ class Consequence:
 
     @property
     def kind(self) -> str:
-        return self.subject.kind
+        """Chapter 15. Its own stage, not the wrapped subject's. A gate that wants the
+        ledger's amount and a gate that wants the model's words are asking for two
+        different objects, and before this they could not say which."""
+        return "consequence"
 
     @property
     def name(self) -> str:
@@ -77,6 +81,12 @@ class ToolAdmission:
     name: str = "tool-admission"
     role: Role = Role.GATE
     consumes: frozenset[str] = frozenset()
+    judges: str = "proposal"
+    catches: frozenset[Hostile] = frozenset({
+        Hostile.PHANTOM_TOOL,
+        Hostile.MISSING_ARGUMENT,
+        Hostile.WRONG_TYPE,
+    })
 
     def decide(
         self, subject: Subject, run: HasMode, verdicts: Mapping[str, Verdict]

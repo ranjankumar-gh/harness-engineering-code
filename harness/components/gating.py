@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 from typing import Mapping, Protocol
 
+from harness.adversary import Hostile
 from harness.gates import GatePolicy, Tier
 from harness.roles import Decision, Disposition, Role, Verdict
 from harness.state import Mode, Subject
@@ -40,6 +41,13 @@ class PolicyGate:
     policy: GatePolicy
     name: str = "policy-gate"
     role: Role = Role.GATE
+    #: The consequence, not the proposal: Chapter 10's whole point is that the number
+    #: this gate thresholds comes from the ledger and never from the model.
+    judges: str = "consequence"
+    #: Chapter 15. Empty, declared rather than omitted. This gate catches no model
+    #: behaviour at all: Consequence Gating decides who is allowed to be wrong, and
+    #: nothing the model writes makes a refund reversible.
+    catches: frozenset[Hostile] = frozenset()
 
     @property
     def consumes(self) -> frozenset[str]:

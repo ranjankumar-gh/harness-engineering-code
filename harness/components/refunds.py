@@ -8,8 +8,9 @@ from typing import Mapping
 
 from harness.billing import BillingFacts
 from harness.errors import BoundExceeded
+from harness.adversary import Hostile
 from harness.roles import Decision, Disposition, Role, Verdict
-from harness.state import Proposal, RunContext
+from harness.state import Proposal, RunContext, Subject
 
 
 @dataclass
@@ -19,13 +20,17 @@ class AmountOnInvoice:
     name: str = "amount-on-invoice"
     role: Role = Role.COMPARATOR
     emits: str = "amount_on_invoice"
+    judges: str = "proposal"
+    #: Empty since Chapter 15. This comparator claimed the ungrounded amount and could
+    #: not have caught one: its guard runs on refunds, and Chapter 10 took the amount
+    #: parameter off refunds. The claim moved to amounts-grounded, which reads the one
+    #: write whose amount the model still writes.
+    catches: frozenset[Hostile] = frozenset()
 
-    def compare(
-        self, proposal: Proposal, run: RunContext[BillingFacts]
-    ) -> Verdict:
-        if proposal.tool != "issue_refund":
+    def compare(self, subject: Subject, run: RunContext[BillingFacts]) -> Verdict:
+        if subject.name != "issue_refund":
             return Verdict(self.emits, True, "not a refund")
-        amount = Decimal(str(proposal.arguments["amount"]))
+        amount = Decimal(str(subject.arguments["amount"]))
         matches = [i.invoice_id for i in run.facts.invoices if i.amount == amount]
         if matches:
             return Verdict(self.emits, True, f"matches {matches[0]}")
@@ -41,6 +46,7 @@ class RefundGate:
     name: str = "refund-gate"
     role: Role = Role.GATE
     consumes: frozenset[str] = frozenset({"amount_on_invoice"})
+    judges: str = "proposal"
 
     def decide(
         self,
@@ -63,6 +69,7 @@ class DailyRefundCeiling:
     limit: Decimal = Decimal("2000")
     name: str = "daily-refund-ceiling"
     role: Role = Role.BOUND
+    catches: frozenset[Hostile] = frozenset({Hostile.SPLIT_ACROSS_CALLS})
 
     def check(self, run: RunContext[BillingFacts]) -> None:
         if run.facts.refunded_today >= self.limit:
@@ -99,11 +106,13 @@ class InvoiceBelongsToAccount:
     name: str = "invoice-belongs-to-account"
     role: Role = Role.COMPARATOR
     emits: str = "invoice_owned"
+    judges: str = "proposal"
+    catches: frozenset[Hostile] = frozenset({Hostile.FOREIGN_INVOICE})
 
-    def compare(self, proposal: Proposal, run: RunContext[BillingFacts]) -> Verdict:
-        if proposal.tool != "issue_refund":
+    def compare(self, subject: Subject, run: RunContext[BillingFacts]) -> Verdict:
+        if subject.name != "issue_refund":
             return Verdict(self.emits, True, "not a refund")
-        invoice_id = str(proposal.arguments.get("invoice_id", ""))
+        invoice_id = str(subject.arguments.get("invoice_id", ""))
         for invoice in run.facts.invoices:
             if invoice.invoice_id == invoice_id:
                 return Verdict(self.emits, True, f"{invoice_id} is on this account")

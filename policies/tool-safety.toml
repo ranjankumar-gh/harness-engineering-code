@@ -150,7 +150,10 @@ returns = ["credit_id", "applied_amount"]
 
   # The model writes this number. It cannot be narrowed away: a goodwill credit is not
   # on any invoice, which is the whole point of it. So this tool keeps its comparator
-  # and its bands, and the matrix records that it earned them.
+  # and its bands, and the matrix records that it earned them. Chapter 15 named the
+  # comparator: amounts_grounded, which asks whether the number appeared anywhere the
+  # system was shown. "Is it on an invoice" is the wrong question for a credit and
+  # would refuse the goodwill case this parameter exists for.
   [tool.consequence]
   source = "parameter"
   name = "amount"
