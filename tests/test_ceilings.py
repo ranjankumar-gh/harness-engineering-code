@@ -368,6 +368,8 @@ def test_the_wired_graph_keeps_the_budget_equal_to_its_journal() -> None:
     assert out.budget == Budget.of(out.spend)
     assert out.budget.depth == supersteps, "depth counts what the framework counts"
     assert len(out.refunded) == 3 and out.decisions[-1].gate == "issue_refund-count"
+    left = [d for d in out.duplicates if d not in out.refunded]
+    assert len(left) == 2, "the two the ceiling refused are left for a person"
 
 
 def test_a_refused_fanout_spends_nothing_on_branches() -> None:

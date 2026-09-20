@@ -14,7 +14,7 @@ from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Annotated, Any, cast
 
-from langgraph.errors import GraphRecursionError
+from langgraph.errors import GraphRecursionError, InvalidUpdateError
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import Send
 
@@ -31,6 +31,7 @@ from harness.ceilings import (
     unenforceable,
     unreachable,
 )
+from harness.checkpoint import CheckpointSpec, undeclared
 from harness.components.ceilings import RunCeilings
 from harness.components.refunds import ToolCallCeiling
 from harness.errors import BoundExceeded
@@ -45,7 +46,7 @@ from harness.graph.ceilings import (
 )
 from harness.repair import RepairLadder
 from harness.resilience import ResiliencePolicy
-from harness.state import Mode, RunState, Spend
+from harness.state import Budget, Mode, RunState, Spend
 from harness.tools import ToolRegistry
 
 CONFIG = RunBudgetConfig.load("policies/run-budget.toml")
@@ -320,6 +321,15 @@ def show_depth() -> None:
         print("  recursion_limit 7, the first draft's:", str(exc).splitlines()[0])
 
 
+def show_the_field_nobody_decided() -> None:
+    """Chapter 12's startup check, run against a spec with this chapter's rule removed."""
+    print("\n=== the field Chapter 12's check would have caught")
+    spec = CheckpointSpec.load("policies/checkpoint-spec.toml")
+    without = replace(spec, rules=tuple(r for r in spec.rules if r.field != "spend"))
+    for line in undeclared(without, RunState):
+        print(line)
+
+
 def show_checks() -> None:
     print("\n=== load-time checks")
     ladder = RepairLadder.load("policies/repair-ladder.toml")
@@ -381,7 +391,93 @@ def show_fleet() -> None:
     )
 
 
+# ------------------------------------------------- what the framework counts
+
+
+@dataclass
+class _Counted:
+    """A state object for the probes: a journal with a reducer, and a counter."""
+
+    budget: Budget = dataclasses.field(default_factory=Budget)
+    spend: Annotated[tuple[int, ...], operator.add] = ()
+    i: int = 0
+
+
+def _fan_out(width: int, write_budget: bool = False) -> Any:
+    """One node, then `width` branches in the step after it."""
+
+    def work(_: _Counted) -> dict[str, Any]:
+        if write_budget:
+            return {"budget": Budget(tool_calls=1)}
+        return {"spend": (1,)}
+
+    g: StateGraph[Any, Any, Any, Any] = StateGraph(_Counted)
+    g.add_node("plan", lambda s: {})
+    g.add_node("work", cast(Any, work))
+    g.add_edge(START, "plan")
+    g.add_conditional_edges(
+        "plan", lambda s: [Send("work", s) for _ in range(width)], ["work"]
+    )
+    g.add_edge("work", END)
+    return g.compile()
+
+
+def _loop(stop_at: int) -> Any:
+    g: StateGraph[Any, Any, Any, Any] = StateGraph(_Counted)
+    g.add_node("step", cast(Any, lambda s: {"i": s.i + 1}))
+    g.add_edge(START, "step")
+    g.add_conditional_edges(
+        "step", lambda s: "step" if s.i < stop_at else END, ["step", END]
+    )
+    return g.compile()
+
+
+def _chain(n: int) -> Any:
+    g: StateGraph[Any, Any, Any, Any] = StateGraph(_Counted)
+    for i in range(n):
+        g.add_node(f"n{i}", cast(Any, lambda s: {"i": s.i + 1}))
+    g.add_edge(START, "n0")
+    for i in range(n - 1):
+        g.add_edge(f"n{i}", f"n{i + 1}")
+    g.add_edge(f"n{n - 1}", END)
+    return g.compile()
+
+
+def show_framework() -> None:
+    """The measurements the chapter makes about LangGraph itself."""
+    print("\n=== what the recursion limit counts")
+    for width in (3, 50, 1000):
+        out = _fan_out(width).invoke(_Counted(), {"recursion_limit": 3})
+        print(f"width={width:5d} recursion_limit=3: ok, {len(out['spend'])} work calls")
+    try:
+        _loop(100).invoke(_Counted(), {"recursion_limit": 10})
+    except GraphRecursionError as exc:
+        print(f"loop recursion_limit=10: GraphRecursionError: {exc.args[0].splitlines()[0]}")
+
+    print("\n=== the default, on an unconfigured loop")
+    try:
+        _loop(20000).invoke(_Counted())
+    except GraphRecursionError as exc:
+        print(exc.args[0].splitlines()[0])
+
+    print("\n=== eight nodes in a row")
+    for limit in (8, 9):
+        try:
+            _chain(8).invoke(_Counted(), {"recursion_limit": limit})
+            print(f"recursion_limit={limit}: ok")
+        except GraphRecursionError:
+            print(f"recursion_limit={limit}: GraphRecursionError")
+
+    print("\n=== two branches writing one plain field")
+    try:
+        _fan_out(2, write_budget=True).invoke(_Counted())
+    except InvalidUpdateError as exc:
+        print(f"InvalidUpdateError: {exc.args[0].splitlines()[0]}")
+
+
 if __name__ == "__main__":
+    show_framework()
+    show_the_field_nobody_decided()
     show_before()
     show_with()
     show_depth()
