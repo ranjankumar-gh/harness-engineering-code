@@ -6,3 +6,8 @@ __pycache__/
 dist/
 build/
 *.egg-info/
+
+# Authoring-tool files never belong in this repo (see the book project, not here).
+CLAUDE.md
+AGENTS.md
+.claude/
