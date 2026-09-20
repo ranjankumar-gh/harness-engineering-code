@@ -8,9 +8,9 @@ from typing import Any, Callable
 from langgraph.graph import END, START, StateGraph
 
 from harness.components.validation import RepairRunner, StructuredOutput
-from harness.repair import RepairLadder, Rung
+from harness.repair import RepairLadder
 from harness.roles import Correction
-from harness.state import Proposal, RunState
+from harness.state import GateRecord, Proposal, RunState, Spend
 
 DEFERRED = "deferred"
 
@@ -26,13 +26,25 @@ def make_validation_node(
         raw = state.facts.raw.get("model_output", "")
         outcome = runner.run(raw, reask)
 
+        # The closer. This node used to read `deferred` and `text` and discard the rest,
+        # so a ladder that spent three re-asks wrote nothing to the budget and Chapter
+        # 13's ceilings could not see it. The rung and the trail went the same way, which
+        # made a deterministic repair and a third re-ask indistinguishable downstream.
+        # Both are spend and both are a decision, and both belong on the channel.
+        spent = Spend("repair-ladder", model_calls=outcome.model_calls)
+        trail = "; ".join(outcome.trail)
+        changed: dict[str, Any] = {
+            "spend": (spent,),
+            "budget": state.budget.after(spent),
+            "decisions": state.decisions
+            + (GateRecord("repair-ladder", outcome.rung.value, trail),),
+        }
+
         if outcome.deferred:
-            return {"status": DEFERRED}
+            return {**changed, "status": DEFERRED}
 
         parsed = json.loads(outcome.text or "{}")
-        return {
-            "proposal": Proposal(parsed["tool"], parsed["arguments"]),
-        }
+        return {**changed, "proposal": Proposal(parsed["tool"], parsed["arguments"])}
 
     return validate
 

@@ -1,9 +1,19 @@
-"""Wiring retry and the breaker into a graph. Chapter 8, pass three."""
+"""Wiring retry into a graph. Chapter 8, pass three.
+
+The closer corrected this docstring, which used to say "retry and the breaker". The
+breaker is not wired here and never was. `harness/resilience.py` offers three mechanisms
+and this file uses one: `Breaker`, `DependencyHealth` and `choose_fallback` have no node,
+and `RunBudget.exhausted` is reimplemented inline below rather than called.
+
+That is a defensible scope for one chapter's graph. What was not defensible was the
+docstring claiming otherwise while a `clock` parameter sat unused in the node factory,
+which is precisely the socket the breaker would have plugged into. A module that looks
+more wired than it is, is the closing chapter's whole subject arriving in its own source.
+"""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
 from typing import Any, Callable
 
 from langgraph.graph import END, START, StateGraph
@@ -32,7 +42,6 @@ def make_call_node(
     invoke: Callable[[RunState[Any], int], CallOutcome],
     safety: ToolRetrySafety,
     sleep: Callable[[int], None],
-    clock: Callable[[], datetime],
 ) -> Any:
     """The retry loop lives here, not in the graph. Sleeping is injected so it is testable."""
 
@@ -79,12 +88,11 @@ def build(
     safety: ToolRetrySafety,
     *,
     sleep: Callable[[int], None] = lambda _ms: None,
-    clock: Callable[[], datetime] | None = None,
 ) -> Any:
     graph: StateGraph[Any, Any, Any, Any] = StateGraph(RunState)
     graph.add_node(
         "call",
-        make_call_node(policy, invoke, safety, sleep, clock or datetime.now),
+        make_call_node(policy, invoke, safety, sleep),
     )
     graph.add_node("proceed", lambda state: {})
     graph.add_node("escalate", lambda state: {})

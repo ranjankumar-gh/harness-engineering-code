@@ -16,7 +16,15 @@ dependencies = [
 
 [project.optional-dependencies]
 # Only the chapters that wire a graph need these. Nothing below harness/graph/
-# imports them, and the test suite runs without them.
+# imports them, and the test suite runs without them: with langgraph uninstalled, 292 of
+# the 386 tests pass and 20 skip, the other two files being skipped whole. Deleting
+# harness/graph/ instead is a different experiment with a different answer, 323, and the
+# closing chapter runs both because conflating them flatters the claim.
+#
+# That second clause was false until the closing chapter checked it. Two test files
+# imported langgraph at module scope with no guard, so 76 tests failed to collect
+# instead of skipping, and this comment had been wrong since Chapter 12 because nobody
+# ran the case it describes. Both files now carry the guard the other eight already had.
 graph = [
     "langgraph>=1.2,<2",
     "langchain>=1.4,<2",

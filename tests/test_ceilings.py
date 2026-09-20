@@ -16,6 +16,13 @@ from pathlib import Path
 from typing import Annotated, Any, cast
 
 import pytest
+
+# The closer. These imports are at module scope, so without this guard the whole
+# file fails to collect when langgraph is absent, and pyproject's claim that "the
+# test suite runs without them" was false by 76 tests. Every other graph test in
+# this suite guards per function; these two files were the exception.
+pytest.importorskip("langgraph")
+
 from langgraph.errors import InvalidUpdateError
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import Send

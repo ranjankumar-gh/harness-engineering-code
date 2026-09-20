@@ -9,7 +9,7 @@ from typing import Any, Callable, Generic, Mapping, Protocol, TypeVar, runtime_c
 
 from harness.boundary import Context
 from harness.errors import BoundExceeded, HarnessError, OpenLoopError, Refused
-from harness.state import Proposal, RunContext, RunState, Subject
+from harness.state import Proposal, RunContext, RunState, Spend, Subject
 
 FactsT = TypeVar("FactsT")
 
@@ -339,5 +339,17 @@ class Harness(Generic[FactsT]):
             if not allowed:
                 raise Refused(gate.name, decision.disposition.value, decision.reason)
 
-        run.budget.tool_calls += 1
+        # The closer. This was `run.budget.tool_calls += 1` until the closing chapter, a
+        # nested mutation of exactly the kind `harness/graph/resilience.py` carries a
+        # comment warning against: Chapter 12 measured that it reaches SqliteSaver and
+        # never reaches Postgres. Chapter 3 wrote it here, nine chapters before that
+        # measurement, and when Chapter 13 moved every graph node off the pattern nobody
+        # came back for the executor. It was not put back. It was never taken out.
+        #
+        # The journal is the same one Chapter 13 gave the graph layer. A caller running
+        # this inside a node still has to return what changed; `act` cannot do that for
+        # them, and the closing chapter is about what that costs.
+        spent = Spend("harness.act", tool_calls=1)
+        run.spend = run.spend + (spent,)
+        run.budget = run.budget.after(spent)
         return self._tools[proposal.tool](**dict(proposal.arguments))

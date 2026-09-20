@@ -14,6 +14,13 @@ from pathlib import Path
 from typing import Any, Sequence, cast
 
 import pytest
+
+# The closer. These imports are at module scope, so without this guard the whole
+# file fails to collect when langgraph is absent, and pyproject's claim that "the
+# test suite runs without them" was false by 76 tests. Every other graph test in
+# this suite guards per function; these two files were the exception.
+pytest.importorskip("langgraph.checkpoint.sqlite")
+
 from langchain_core.runnables import RunnableConfig
 from langgraph.types import Durability
 from langgraph.checkpoint.memory import InMemorySaver
