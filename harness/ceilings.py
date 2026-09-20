@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Any, Mapping, Protocol, Sequence
 
 from harness.errors import BoundExceeded, HarnessError
+from harness.authority import BandTable
 from harness.gates import GatePolicy
 from harness.repair import RepairLadder
 from harness.resilience import ResiliencePolicy
@@ -57,7 +58,7 @@ def charge(spend: Spend, meter: Meter) -> Decimal:
 class Ceiling:
     meter: Meter
     scope: Scope
-    mode: str
+    band: str
     limit: Decimal
     why: str
 
@@ -72,7 +73,7 @@ class ToolLimit:
     """
 
     tool: str
-    mode: str
+    band: str
     max_count: int
     max_total: Decimal
     why: str
@@ -118,20 +119,20 @@ class RunBudgetConfig:
     fleet_window: timedelta
     hold_for: timedelta
 
-    def for_mode(self, mode: str, scope: Scope = Scope.RUN) -> tuple[Ceiling, ...]:
-        return tuple(c for c in self.ceilings if c.mode == mode and c.scope is scope)
+    def for_band(self, band: str, scope: Scope = Scope.RUN) -> tuple[Ceiling, ...]:
+        return tuple(c for c in self.ceilings if c.band == band and c.scope is scope)
 
     def limit(
-        self, meter: Meter, mode: str, scope: Scope = Scope.RUN
+        self, meter: Meter, band: str, scope: Scope = Scope.RUN
     ) -> Decimal | None:
-        for c in self.for_mode(mode, scope):
+        for c in self.for_band(band, scope):
             if c.meter is meter:
                 return c.limit
         return None
 
-    def tool_limit(self, tool: str, mode: str) -> ToolLimit | None:
+    def tool_limit(self, tool: str, band: str) -> ToolLimit | None:
         for t in self.tools:
-            if t.tool == tool and t.mode == mode:
+            if t.tool == tool and t.band == band:
                 return t
         return None
 
@@ -189,7 +190,7 @@ class RunBudgetConfig:
                 Ceiling(
                     meter=Meter(c["meter"]),
                     scope=Scope(c["scope"]),
-                    mode=c["mode"],
+                    band=c["band"],
                     limit=Decimal(str(c["limit"])),
                     why=c.get("why", "").strip(),
                 )
@@ -198,7 +199,7 @@ class RunBudgetConfig:
             tools = tuple(
                 ToolLimit(
                     tool=t["tool"],
-                    mode=t["mode"],
+                    band=t["band"],
                     max_count=int(t["max_count"]),
                     max_total=Decimal(t["max_total"]),
                     why=t.get("why", "").strip(),
@@ -227,8 +228,8 @@ class RunBudgetConfig:
         except (KeyError, ValueError) as exc:
             raise CeilingError(f"{path}: {exc}") from exc
 
-        named = [(f"{c.meter.value} in {c.mode}", c.why) for c in ceilings]
-        named += [(f"{t.tool} in {t.mode}", t.why) for t in tools]
+        named = [(f"{c.meter.value} in {c.band}", c.why) for c in ceilings]
+        named += [(f"{t.tool} in {t.band}", t.why) for t in tools]
         named += [(f"fan-out at {f.node}", f.why) for f in fanouts]
         for label, why in named:
             if not why:
@@ -287,19 +288,19 @@ def reserve(
     proposed amount would let the model make itself affordable by writing a smaller
     number, which Chapter 10 already closed once for the gate.
     """
-    for c in config.for_mode(run.mode.value):
+    for c in config.for_band(run.band):
         now = reading(run.budget, c.meter)
         needed = charge(worst, c.meter)
         if needed and now + needed > c.limit:
             raise BoundExceeded(
                 f"{c.meter.value}-ceiling",
                 f"{now} spent and {needed} reserved for {worst.component} "
-                f"would pass the {run.mode.value} limit of {c.limit}",
+                f"would pass the {run.band} limit of {c.limit}",
             )
 
     if not worst.tool:
         return
-    limit = config.tool_limit(worst.tool, run.mode.value)
+    limit = config.tool_limit(worst.tool, run.band)
     if limit is None:
         return
     earlier = [s for s in run.spend if s.tool == worst.tool]
@@ -307,7 +308,7 @@ def reserve(
         raise BoundExceeded(
             f"{worst.tool}-count",
             f"{len(earlier)} already this run, limit {limit.max_count} in "
-            f"{run.mode.value}",
+            f"{run.band}",
         )
     ceiling_amount = worst_amount(policy, worst.tool, run.mode.value)
     if ceiling_amount is None:
@@ -317,7 +318,7 @@ def reserve(
         raise BoundExceeded(
             f"{worst.tool}-total",
             f"{moved} moved and up to {ceiling_amount} more would pass "
-            f"{limit.max_total} in {run.mode.value}",
+            f"{limit.max_total} in {run.band}",
         )
 
 
@@ -386,16 +387,15 @@ def unreachable(config: RunBudgetConfig) -> tuple[str, ...]:
     found: list[str] = []
     for f in config.fanouts:
         per = branch_worst(config, f)
-        for mode in sorted({c.mode for c in config.ceilings}):
-            for c in config.for_mode(mode):
+        for band in sorted({c.band for c in config.ceilings}):
+            for c in config.for_band(band):
                 need = charge(per, c.meter) * f.max_width
                 if c.meter is Meter.WIDTH:
                     need = Decimal(f.max_width)
                 if need > c.limit:
                     found.append(
-                        f"{mode}: {f.node} at its limit of {f.max_width} branches "
-                        f"needs "
-                        f"{need} {c.meter.value}; the run allows {c.limit}"
+                        f"{band}: {f.node} at its limit of {f.max_width} branches "
+                        f"needs {need} {c.meter.value}; the run allows {c.limit}"
                     )
     return tuple(found)
 
@@ -415,24 +415,24 @@ def unaffordable(
     calls = (1 + ladder.model_calls_at_worst) * resilience.retry.max_attempts
     one = config.worst_call(node)
     found: list[str] = []
-    for mode in sorted({c.mode for c in config.ceilings}):
-        cap = config.limit(Meter.MODEL_CALLS, mode)
+    for band in sorted({c.band for c in config.ceilings}):
+        cap = config.limit(Meter.MODEL_CALLS, band)
         if cap is not None:
             fits = int(cap) // calls
             if fits < 1:
                 found.append(
-                    f"{mode}: one worst-case proposal is {calls} model calls and "
+                    f"{band}: one worst-case proposal is {calls} model calls and "
                     f"the run may make {cap}"
                 )
             else:
                 found.append(
-                    f"{mode}: {cap} model calls pay for {fits} worst-case "
+                    f"{band}: {cap} model calls pay for {fits} worst-case "
                     f"proposal(s) of {calls} calls"
                 )
-        cost_cap = config.limit(Meter.COST, mode)
+        cost_cap = config.limit(Meter.COST, band)
         if cost_cap is not None and one.cost * calls > cost_cap:
             found.append(
-                f"{mode}: one worst-case proposal costs {one.cost * calls} and "
+                f"{band}: one worst-case proposal costs {one.cost * calls} and "
                 f"the run may spend {cost_cap}"
             )
     return tuple(found)
@@ -441,11 +441,11 @@ def unaffordable(
 def split(config: RunBudgetConfig, resilience: ResiliencePolicy) -> tuple[str, ...]:
     """Chapter 8 declared a per-run model-call budget before this file existed."""
     found: list[str] = []
-    for mode in sorted({c.mode for c in config.ceilings}):
-        cap = config.limit(Meter.MODEL_CALLS, mode)
+    for band in sorted({c.band for c in config.ceilings}):
+        cap = config.limit(Meter.MODEL_CALLS, band)
         if cap is not None and int(cap) != resilience.model_calls_per_run:
             found.append(
-                f"{mode}: resilience.toml allows {resilience.model_calls_per_run} "
+                f"{band}: resilience.toml allows {resilience.model_calls_per_run} "
                 f"model calls per run and run-budget.toml allows {cap}"
             )
     if config.hold_for.total_seconds() <= resilience.wall_clock_seconds:
@@ -459,22 +459,41 @@ def split(config: RunBudgetConfig, resilience: ResiliencePolicy) -> tuple[str, .
 
 
 def unenforceable(
-    config: RunBudgetConfig, registry: ToolRegistry, policy: GatePolicy
+    config: RunBudgetConfig,
+    registry: ToolRegistry,
+    policy: GatePolicy,
+    table: BandTable,
 ) -> tuple[str, ...]:
-    """Tool limits on tools that do not exist, or on amounts nothing bands."""
+    """Tool limits on tools that do not exist, or on amounts nothing bands.
+
+    Chapter 14 keyed this file by band while the gate policy stayed keyed by mode, so
+    the check now also asks whether any mode reaches the band a limit is written for.
+    A limit in a band nothing resolves to is a limit that never runs.
+    """
     found: list[str] = []
     for t in config.tools:
         if registry.spec(t.tool) is None:
             found.append(f"{t.tool} has a limit and is not in the tool registry")
-        elif worst_amount(policy, t.tool, t.mode) is None:
+            continue
+        modes = [
+            m.mode for m in table.modes
+            if t.band in (m.ceiling.value, m.floor.value)
+        ]
+        if not modes:
             found.append(
-                f"{t.tool} in {t.mode} has a money limit and no amount band in "
-                f"the gate policy, so its worst single amount is unknown"
+                f"{t.tool} has a limit in {t.band} and no mode resolves to that band"
             )
+            continue
+        for mode in modes:
+            if worst_amount(policy, t.tool, mode) is None:
+                found.append(
+                    f"{t.tool} in {t.band} has a money limit and the gate policy gives "
+                    f"it no amount band in {mode}, so its worst single amount is unknown"
+                )
     return tuple(found)
 
 
-def recursion_limit(config: RunBudgetConfig, mode: str) -> int:
+def recursion_limit(config: RunBudgetConfig, band: str) -> int:
     """Derived from the depth ceiling, never declared beside it.
 
     Three above the ceiling. The step a bound refuses still runs, and the run then has
@@ -483,10 +502,10 @@ def recursion_limit(config: RunBudgetConfig, mode: str) -> int:
     1.2.11, a limit of L admits L - 1 supersteps. The first draft of this function
     returned the ceiling plus one, and the run crashed on its way out.
     """
-    depth = config.limit(Meter.DEPTH, mode)
+    depth = config.limit(Meter.DEPTH, band)
     if depth is None:
         raise CeilingError(
-            f"{mode} has no depth ceiling to derive a recursion limit from"
+            f"{band} has no depth ceiling to derive a recursion limit from"
         )
     return int(depth) + 3
 

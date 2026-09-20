@@ -1,0 +1,76 @@
+# The authority band table for the billing support agent. Chapter 14.
+#
+# Four bands, narrowest first, ordered by how far a run gets through sense, reason, act
+# and verify before something outside it stops it. The order is autonomy, not danger:
+# the widest band is the one that runs with nobody there, which is why the most
+# consequential tool in this system is not in it.
+#
+# A band is earned by the reversibility and blast radius of the actions it reaches,
+# never by how good the model is. A better model does not move a line in this file.
+
+# Whatever the system does when it cannot proceed is never gated, a band included.
+escape_hatch = "escalate_to_human"
+
+[[band]]
+name = "observe"
+executes = false
+unpriced_irreversible = false
+human_in_path = false
+irreversible_ceiling = "0.00"
+why = """Reads and correlates, produces understanding. Every sensor in Part II runs
+here, and a run stuck in this band still answers Chapter 1's audit questions."""
+
+[[band]]
+name = "advise"
+executes = false
+unpriced_irreversible = false
+human_in_path = true
+irreversible_ceiling = "0.00"
+why = """Produces a proposal and hands it to a person with its evidence. This is where
+a run lands when the context floor was cleared but something else was not, because a
+proposal a person reads is the cheapest safe output the system has."""
+
+[[band]]
+name = "act-within-bounds"
+executes = true
+unpriced_irreversible = true
+human_in_path = true
+irreversible_ceiling = "0.00"
+why = """Executes inside an envelope with a person in the path. Irreversible actions
+are reachable here and only through review: the ceiling for an UNREVIEWED irreversible
+action is zero, because in this band there is no such thing."""
+
+[[band]]
+name = "closed-loop"
+executes = true
+unpriced_irreversible = true
+human_in_path = false
+irreversible_ceiling = "50.00"
+why = """Acts and verifies with nobody there. Reserved for actions that are reversible,
+plus the one irreversible action whose blast radius is small enough to be worth the
+autonomy: a refund at or below 50.00, which is Chapter 9's automatic band overnight.
+Raising this number is the single most consequential edit in the repository."""
+
+# ---------------------------------------------------------------- resolution
+#
+# A mode does not set a band. It sets the widest band the run may reach, and the run
+# only reaches it if the evidence holds. Evidence is about the world, not the model:
+# whether a reviewer can be reached, whether the context cleared Chapter 5's floor,
+# whether the primary model is the one answering.
+
+[[mode]]
+mode = "copilot"
+ceiling = "act-within-bounds"
+requires = ["reviewer_reachable", "context_floor_cleared"]
+floor = "advise"
+why = """A person is supposed to be watching. If the rota cannot be reached, the person
+is a hope rather than a control, and the run drops to producing proposals."""
+
+[[mode]]
+mode = "queue-drain"
+ceiling = "closed-loop"
+requires = ["context_floor_cleared", "primary_model"]
+floor = "observe"
+why = """Nobody is there, so the run may only do what is safe to do unwatched. On a
+fallback model the plant is uncharacterised (Chapter 8's Second Plant) and the run
+drops to observing: the band was designed against measurements of the primary."""

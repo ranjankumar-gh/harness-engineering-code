@@ -37,4 +37,4 @@ half_open_probes = 1
 [[fallback]]
 to = "secondary"
 window_tokens = 16000
-max_band = "propose-only"
+max_band = "advise"   # Chapter 14: was "propose-only" before the bands

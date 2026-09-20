@@ -27,7 +27,7 @@ def make_validation_node(
         outcome = runner.run(raw, reask)
 
         if outcome.deferred:
-            return {"band": DEFERRED}
+            return {"status": DEFERRED}
 
         parsed = json.loads(outcome.text or "{}")
         return {
@@ -39,7 +39,7 @@ def make_validation_node(
 
 def route(state: RunState[Any]) -> str:
     """A deferral leaves the graph. It is an outcome, not an error."""
-    return "defer" if state.band == DEFERRED else "act"
+    return "defer" if state.status == DEFERRED else "act"
 
 
 def build(

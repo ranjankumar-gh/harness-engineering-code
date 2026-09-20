@@ -34,8 +34,8 @@ def evaluate(log: ExerciseLog, **kwargs: Any) -> ReadinessReport:
     defaults: dict[str, Any] = {
         "now": NOW,
         "armed_stop_paths": ARMED,
-        "copilot_band": "irreversible-writes",
-        "queue_drain_band": "reversible-writes",
+        "copilot_band": "closed-loop",
+        "queue_drain_band": "act-within-bounds",
     }
     defaults.update(kwargs)
     return QueueDrainReadiness().evaluate(closed_registry(), log, **defaults)
@@ -123,7 +123,7 @@ def test_one_of_each_failure_makes_it_go() -> None:
 def test_unattended_authority_wider_than_supervised_is_no_go() -> None:
     log = ExerciseLog()
     report = evaluate(
-        log, copilot_band="reversible-writes", queue_drain_band="irreversible-writes"
+        log, copilot_band="act-within-bounds", queue_drain_band="closed-loop"
     )
     authority = [f for f in report.findings if f.check == "authority"][0]
     assert not authority.passed

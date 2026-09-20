@@ -65,7 +65,7 @@ def make_gate_node(
 
         changed: dict[str, Any] = {"decisions": state.decisions}
         if decision.disposition is Disposition.ESCALATE:
-            changed["band"] = "awaiting-approval"
+            changed["status"] = "awaiting-approval"
         return changed
 
     return decide

@@ -6,6 +6,7 @@ from typing import Any
 
 from langgraph.graph import END, START, StateGraph
 
+from harness.authority import Band
 from harness.budget import ContextBudget, FloorBreached
 from harness.components.assembly import Candidate, ContextAssembler
 from harness.state import RunState
@@ -22,7 +23,7 @@ def make_assembly_node(budget: ContextBudget) -> Any:
         context, evictions = assembler.assemble(candidates)
         return {
             "context": context,                                   # <- through the channel
-            "band": "propose-only" if evictions else state.band,
+            "band": Band.ADVISE.value if evictions else state.band,
         }
 
     return assemble

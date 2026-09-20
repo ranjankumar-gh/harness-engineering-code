@@ -26,7 +26,7 @@ def make_gate_node(gate: PolicyGate, verdicts: Mapping[str, Verdict]) -> Any:
 
         changed: dict[str, Any] = {"decisions": state.decisions}      # <1>
         if decision.disposition is Disposition.ESCALATE:
-            changed["band"] = AWAITING_APPROVAL
+            changed["status"] = AWAITING_APPROVAL
         return changed
 
     return decide

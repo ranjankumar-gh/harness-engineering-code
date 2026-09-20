@@ -28,7 +28,7 @@ class RunCeilings:
     role: Role = Role.BOUND
 
     def check(self, run: RunContext[Any]) -> None:
-        for c in self.config.for_mode(run.mode.value):
+        for c in self.config.for_band(run.band):
             if reading(run.budget, c.meter) >= c.limit:
                 raise BoundExceeded(
                     f"{c.meter.value}-ceiling",

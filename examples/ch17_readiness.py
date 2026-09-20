@@ -58,8 +58,8 @@ def evaluate(log: ExerciseLog) -> str:
             log,
             now=NOW,
             armed_stop_paths=frozenset({"tool-interceptor", "watchdog", "manual-override"}),
-            copilot_band="irreversible-writes",
-            queue_drain_band="reversible-writes",
+            copilot_band="closed-loop",
+            queue_drain_band="act-within-bounds",
         )
         .report()
     )

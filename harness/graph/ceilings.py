@@ -34,7 +34,7 @@ def stopped(state: Any, exc: BoundExceeded) -> dict[str, Any]:
     record = GateRecord(exc.bound, EXCEEDED, exc.detail)
     step = Spend(f"refused by {exc.bound}", depth=1)
     return {
-        "band": EXCEEDED,
+        "status": EXCEEDED,
         "decisions": state.decisions + (record,),
         "spend": (step,),
         "budget": state.budget.after(step),
@@ -87,7 +87,7 @@ def fan_to(
     """The edge after a fan-out node. It opens the branches the node paid for."""
 
     def edge(state: Any) -> Any:
-        if state.band == EXCEEDED:
+        if state.status == EXCEEDED:
             return refused
         return [Send(target, payload(state, item)) for item in items(state)]
 

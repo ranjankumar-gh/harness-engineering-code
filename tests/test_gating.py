@@ -211,7 +211,7 @@ def test_refuse_and_escalate_take_different_edges() -> None:
     escalated = run_in(Mode.COPILOT)
     escalated.proposal = Proposal("issue_refund", {"amount": "940.00"})
     out_escalate = build(GATE, failed).invoke(escalated)
-    assert out_escalate["band"] == AWAITING_APPROVAL
+    assert out_escalate["status"] == AWAITING_APPROVAL
 
     refused = run_in(Mode.COPILOT)
     refused.proposal = Proposal("issue_refund", {"amount": "5000.00"})
@@ -230,4 +230,4 @@ def test_an_escalated_run_is_marked_as_owing_a_human() -> None:
     failed = dict(PASSED)
     failed["invoice_owned"] = Verdict("invoice_owned", False, "on no invoice")
     out = build(GATE, failed).invoke(run)
-    assert out["band"] == AWAITING_APPROVAL
+    assert out["status"] == AWAITING_APPROVAL

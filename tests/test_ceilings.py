@@ -20,6 +20,7 @@ from langgraph.errors import InvalidUpdateError
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import Send
 
+from harness.authority import Band, BandTable
 from harness.billing import BillingFacts
 from harness.ceilings import (
     CeilingError,
@@ -47,13 +48,17 @@ from harness.tools import ToolRegistry
 
 CONFIG = RunBudgetConfig.load("policies/run-budget.toml")
 GATES = GatePolicy.load("policies/gate-policy.toml")
+TABLE = BandTable.load("policies/authority-bands.toml")
 LADDER = RepairLadder.load("policies/repair-ladder.toml")
 RESILIENCE = ResiliencePolicy.load("policies/resilience.toml")
 
 
 def run(**budget: Any) -> RunState[BillingFacts]:
     r: RunState[BillingFacts] = RunState(
-        run_id="r13", mode=Mode.QUEUE_DRAIN, facts=BillingFacts("T-5120", "acct_7730")
+        run_id="r13",
+        mode=Mode.QUEUE_DRAIN,
+        facts=BillingFacts("T-5120", "acct_7730"),
+        band=Band.CLOSED_LOOP.value,
     )
     r.budget = Budget(**budget)
     return r
@@ -99,7 +104,7 @@ def test_a_price_table_without_a_date_is_refused(tmp_path: Path) -> None:
 
 def test_a_limit_without_a_why_is_refused(tmp_path: Path) -> None:
     text = (
-        MINIMAL + '[[ceiling]]\nmeter="cost"\nscope="run"\nmode="copilot"\nlimit="1"\n'
+        MINIMAL + '[[ceiling]]\nmeter="cost"\nscope="run"\nband="advise"\nlimit="1"\n'
     )
     with pytest.raises(CeilingError, match="has no why"):
         RunBudgetConfig.load(write(tmp_path, text))
@@ -115,7 +120,7 @@ def test_a_call_shape_on_an_unpriced_model_is_refused(tmp_path: Path) -> None:
 
 def test_a_meter_that_does_not_exist_is_refused(tmp_path: Path) -> None:
     text = MINIMAL + (
-        '[[ceiling]]\nmeter="dollars"\nscope="run"\nmode="copilot"\n'
+        '[[ceiling]]\nmeter="dollars"\nscope="run"\nband="advise"\n'
         'limit="1"\nwhy="x"\n'
     )
     with pytest.raises(CeilingError):
@@ -239,17 +244,17 @@ def test_a_fanout_the_run_cannot_afford_at_its_own_limit_is_reported() -> None:
 
 def test_a_limit_on_a_tool_the_registry_does_not_offer_is_reported() -> None:
     registry = ToolRegistry.load("policies/tool-safety.toml")
-    assert unenforceable(CONFIG, registry, GATES) == ()
+    assert unenforceable(CONFIG, registry, GATES, TABLE) == ()
     odd = replace(
         CONFIG, tools=CONFIG.tools + (replace(CONFIG.tools[0], tool="refund_all"),)
     )
-    assert unenforceable(odd, registry, GATES) == (
+    assert unenforceable(odd, registry, GATES, TABLE) == (
         "refund_all has a limit and is not in the tool registry",
     )
 
 
 def test_the_recursion_limit_is_derived_and_leaves_room_to_escalate() -> None:
-    assert recursion_limit(CONFIG, "queue-drain") == 16 + 3
+    assert recursion_limit(CONFIG, Band.CLOSED_LOOP.value) == 16 + 3
 
 
 # --------------------------------------------------------------------- fleet
@@ -363,7 +368,7 @@ def test_the_wired_graph_keeps_the_budget_equal_to_its_journal() -> None:
     from examples.ch13_ceilings import CONFIG as EXAMPLE, build_with, run_graph, ticket
 
     out, supersteps = run_graph(
-        build_with(EXAMPLE), ticket(12, 5), recursion_limit(EXAMPLE, "queue-drain")
+        build_with(EXAMPLE), ticket(12, 5), recursion_limit(EXAMPLE, Band.CLOSED_LOOP.value)
     )
     assert out.budget == Budget.of(out.spend)
     assert out.budget.depth == supersteps, "depth counts what the framework counts"
@@ -376,11 +381,11 @@ def test_a_refused_fanout_spends_nothing_on_branches() -> None:
     from examples.ch13_ceilings import CONFIG as EXAMPLE, build_with, run_graph, ticket
 
     out, _ = run_graph(
-        build_with(EXAMPLE), ticket(31, 11), recursion_limit(EXAMPLE, "queue-drain")
+        build_with(EXAMPLE), ticket(31, 11), recursion_limit(EXAMPLE, Band.CLOSED_LOOP.value)
     )
     assert out.budget.model_calls == 1, "the propose call, and no judge"
     assert out.decisions[-1].gate == "lookup-width"
 
 
-def test_the_fleet_ceiling_is_declared_for_queue_drain() -> None:
-    assert CONFIG.limit(Meter.COST, "queue-drain", Scope.FLEET) == Decimal("120.00")
+def test_the_fleet_ceiling_is_declared_for_the_unattended_band() -> None:
+    assert CONFIG.limit(Meter.COST, Band.CLOSED_LOOP.value, Scope.FLEET) == Decimal("120.00")

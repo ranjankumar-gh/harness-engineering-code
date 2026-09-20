@@ -155,7 +155,12 @@ class RunState(Generic[FactsT]):
     run_id: str
     mode: Mode
     facts: FactsT
-    band: str = "read-only"
+    #: Chapter 14. Authority: how far this run may go, as one ordered value. It is
+    #: resolved from evidence at admission and is a `Band` value, not free text.
+    band: str = "observe"
+    #: Chapter 14 split this out of `band`. Where the run is, which is not how much it
+    #: is allowed to do: deferred, degraded, awaiting-approval, approved, exceeded.
+    status: str = "running"
     context: Context = field(default_factory=Context)   # Chapter 2
     proposal: Proposal | None = None
     plan: Plan | None = None                            # Chapter 11
@@ -183,3 +188,4 @@ class RunContext(Protocol[FactsT]):
     decisions: tuple[GateRecord, ...]
     budget: Budget
     spend: tuple[Spend, ...]
+    status: str

@@ -10,17 +10,13 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any
 
+from harness.authority import BAND_ORDER as _BANDS
 from harness.liveness import PROOF_OF_LIFE, ExerciseLog, Outcome
 from harness.roles import HarnessRegistry, Role
 
-#: Provisional. Chapter 14 replaces this with the authority band table, which orders bands
-#: by reversibility rather than by name.
-BAND_ORDER: tuple[str, ...] = (
-    "read-only",
-    "propose-only",
-    "reversible-writes",
-    "irreversible-writes",
-)
+#: Chapter 14 replaced the provisional tuple that used to live here. The ordering is the
+#: authority band table's, and it is the only one in the package.
+BAND_ORDER: tuple[str, ...] = tuple(b.value for b in _BANDS)
 
 
 @dataclass(frozen=True)

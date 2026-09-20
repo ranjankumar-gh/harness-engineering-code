@@ -47,7 +47,7 @@ def make_call_node(
 
         for attempt in range(1, policy.retry.max_attempts + 1):
             if state.budget.model_calls + len(spent) >= policy.model_calls_per_run:
-                return {**paid(), "band": EXHAUSTED}
+                return {**paid(), "status": EXHAUSTED}
 
             outcome = invoke(state, attempt)
             spent.append(Spend("retry", model_calls=1))
@@ -62,13 +62,13 @@ def make_call_node(
             if attempt < policy.retry.max_attempts:
                 sleep(policy.retry.backoff_ms(attempt))
 
-        return {**paid(), "band": DEGRADED}
+        return {**paid(), "status": DEGRADED}
 
     return call
 
 
 def route(state: RunState[Any]) -> str:
-    if state.band in (DEGRADED, EXHAUSTED):
+    if state.status in (DEGRADED, EXHAUSTED):
         return "escalate"
     return "proceed"
 

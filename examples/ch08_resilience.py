@@ -19,7 +19,7 @@ POLICY = ResiliencePolicy.load(
     Path(__file__).resolve().parents[1] / "policies" / "resilience.toml"
 )
 START = datetime(2026, 9, 10, 2, 10, tzinfo=timezone.utc)
-BANDS = ("read-only", "propose-only", "reversible-writes", "irreversible-writes")
+BANDS = ("observe", "advise", "act-within-bounds", "closed-loop")
 
 
 def backoff_table() -> None:
@@ -91,8 +91,8 @@ def breaker_walk() -> None:
 
 def fallback() -> None:
     print("the breaker is open. Fall back?")
-    for floor, band in ((12000, "propose-only"), (20000, "propose-only"),
-                        (12000, "irreversible-writes")):
+    for floor, band in ((12000, "advise"), (20000, "advise"),
+                        (12000, "closed-loop")):
         try:
             chosen = choose_fallback(
                 POLICY, context_floor_tokens=floor, current_band=band, band_order=BANDS

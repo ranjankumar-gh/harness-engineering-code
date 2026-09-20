@@ -1,4 +1,8 @@
-# The budget config for the billing support agent. Chapter 13.
+# The budget config for the billing support agent. Chapter 13, re-keyed by Chapter 14.
+#
+# These were keyed by mode until Chapter 14. They are keyed by authority band now,
+# because how much a run may spend is a question about how much it is allowed to do,
+# and the band is the one ordered value that answers that.
 #
 # A run grows in three directions: what it spends, how many steps it takes in a row, and
 # how many it takes at once. Every ceiling here is checked against the next unit's worst
@@ -47,7 +51,7 @@ max_tokens_out = 200
 [[ceiling]]
 meter = "model_calls"
 scope = "run"
-mode = "queue-drain"
+band = "closed-loop"
 limit = 20
 why = """Chapter 8's number, and it must stay Chapter 8's number: the startup check
 compares the two files. Retries, repairs and fan-out branches all spend it."""
@@ -55,7 +59,7 @@ compares the two files. Retries, repairs and fan-out branches all spend it."""
 [[ceiling]]
 meter = "cost"
 scope = "run"
-mode = "queue-drain"
+band = "closed-loop"
 limit = "1.50"
 why = """One worst-case proposal is twelve calls of up to 0.096 each: 1.152. A ceiling
 set from what ordinary runs spend looks generous and cannot pay for the repair ladder."""
@@ -63,7 +67,7 @@ set from what ordinary runs spend looks generous and cannot pay for the repair l
 [[ceiling]]
 meter = "tool_calls"
 scope = "run"
-mode = "queue-drain"
+band = "closed-loop"
 limit = 30
 why = """Every lookup in a fan-out is a tool call, so this sits above the widest fan-out
 plus the writes that follow it."""
@@ -71,7 +75,7 @@ plus the writes that follow it."""
 [[ceiling]]
 meter = "depth"
 scope = "run"
-mode = "queue-drain"
+band = "closed-loop"
 limit = 16
 why = """Steps in a row. LangGraph's recursion limit is derived from this, three
 above it: this bound fires first and says why, and the run can still escalate."""
@@ -79,7 +83,7 @@ above it: this bound fires first and says why, and the run can still escalate.""
 [[ceiling]]
 meter = "width"
 scope = "run"
-mode = "queue-drain"
+band = "closed-loop"
 limit = 24
 why = """Branches opened across the whole run, not per node: two fan-outs of 20 each
 are 40 lookups whatever each node's own limit says."""
@@ -87,28 +91,28 @@ are 40 lookups whatever each node's own limit says."""
 [[ceiling]]
 meter = "model_calls"
 scope = "run"
-mode = "copilot"
+band = "act-within-bounds"
 limit = 20
 why = "Chapter 8's number, as overnight. A person present does not make calls free."
 
 [[ceiling]]
 meter = "cost"
 scope = "run"
-mode = "copilot"
+band = "act-within-bounds"
 limit = "1.50"
 why = "The same worst-case proposal as queue-drain."
 
 [[ceiling]]
 meter = "tool_calls"
 scope = "run"
-mode = "copilot"
+band = "act-within-bounds"
 limit = 30
 why = "As queue-drain."
 
 [[ceiling]]
 meter = "depth"
 scope = "run"
-mode = "copilot"
+band = "act-within-bounds"
 limit = 24
 why = """Longer than overnight: a person can ask for one more step, and each approval
 wait is a step."""
@@ -116,7 +120,7 @@ wait is a step."""
 [[ceiling]]
 meter = "width"
 scope = "run"
-mode = "copilot"
+band = "act-within-bounds"
 limit = 24
 why = "As queue-drain. Width is a cost question, and the cost does not change by day."
 
@@ -127,7 +131,7 @@ why = "As queue-drain. Width is a cost question, and the cost does not change by
 
 [[tool]]
 tool = "issue_refund"
-mode = "queue-drain"
+band = "closed-loop"
 max_count = 3
 max_total = "150.00"
 why = """Each refund below 50.00 passes the gate on its own. Nothing in the gate can see
@@ -135,7 +139,7 @@ the other refunds in the same run, which is why this exists."""
 
 [[tool]]
 tool = "issue_refund"
-mode = "copilot"
+band = "act-within-bounds"
 max_count = 5
 max_total = "5000.00"
 why = """A person approves anything above 200.00, but approving five in a row is still
@@ -162,7 +166,7 @@ hold_minutes = 30         # a run holding budget longer than this is presumed de
 [[ceiling]]
 meter = "cost"
 scope = "fleet"
-mode = "queue-drain"
+band = "closed-loop"
 limit = "120.00"
 why = """The night's model spend across every run. Each run reserves its own ceiling
 on the way in, so this divided by 1.50 is how many runs may be in flight at once."""

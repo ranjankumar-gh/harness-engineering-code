@@ -58,7 +58,7 @@ def make_merge_node(gate: MergeGate) -> Any:
         state.record(gate.name, decision.disposition.value, decision.reason)
         changed: dict[str, Any] = {"decisions": state.decisions}
         if decision.disposition is Disposition.ESCALATE:
-            changed["band"] = AWAITING_APPROVAL
+            changed["status"] = AWAITING_APPROVAL
         return changed
 
     return merge

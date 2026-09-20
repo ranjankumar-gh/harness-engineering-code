@@ -201,7 +201,7 @@ def test_a_deferral_routes_out_of_the_graph_rather_than_raising() -> None:
     facts = BillingFacts("88421", "acct_4417", raw={"model_output": TRUNCATED})
     run: RunState[BillingFacts] = RunState(run_id="r1", mode=Mode.QUEUE_DRAIN, facts=facts)
     out = build(LADDER, unhelpful).invoke(run)
-    assert out["band"] == DEFERRED
+    assert out["status"] == DEFERRED
     assert out["proposal"] is None
 
 

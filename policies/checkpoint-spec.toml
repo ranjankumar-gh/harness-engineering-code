@@ -40,6 +40,13 @@ the process died. A refund banded against a four-hour-old ledger is a decision m
 evidence that has since changed, and re-reading costs four idempotent reads."""
 
 [[field]]
+name = "status"
+restore = "rederived"
+why = """Chapter 14 split this out of band. Where the run was is re-derived from the
+restored fields: a run that comes back holding awaiting-approval has to ask the gate
+again, because the person it was waiting for may have answered hours ago."""
+
+[[field]]
 name = "band"
 restore = "rederived"
 why = """Derived from mode and policy at resume. A band read back from a checkpoint is a

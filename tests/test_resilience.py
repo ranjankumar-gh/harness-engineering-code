@@ -26,7 +26,7 @@ POLICY = ResiliencePolicy.load(
     Path(__file__).resolve().parents[1] / "policies" / "resilience.toml"
 )
 START = datetime(2026, 9, 10, 2, 10, tzinfo=timezone.utc)
-BANDS = ("read-only", "propose-only", "reversible-writes", "irreversible-writes")
+BANDS = ("observe", "advise", "act-within-bounds", "closed-loop")
 
 
 def records(pattern: str, *, every: int = 3) -> list[CallRecord]:
@@ -208,7 +208,7 @@ def test_a_failed_probe_reopens_the_breaker_and_restarts_the_clock() -> None:
 
 def test_a_fallback_that_satisfies_everything_is_chosen() -> None:
     chosen = choose_fallback(
-        POLICY, context_floor_tokens=12000, current_band="propose-only", band_order=BANDS
+        POLICY, context_floor_tokens=12000, current_band="advise", band_order=BANDS
     )
     assert chosen.to == "secondary"
 
@@ -219,7 +219,7 @@ def test_a_fallback_below_the_context_floor_is_refused() -> None:
         choose_fallback(
             POLICY,
             context_floor_tokens=20000,
-            current_band="propose-only",
+            current_band="advise",
             band_order=BANDS,
         )
 
@@ -229,7 +229,7 @@ def test_a_fallback_narrower_than_the_runs_authority_is_refused() -> None:
         choose_fallback(
             POLICY,
             context_floor_tokens=12000,
-            current_band="irreversible-writes",
+            current_band="closed-loop",
             band_order=BANDS,
         )
 
@@ -299,7 +299,7 @@ def test_the_retry_loop_lives_inside_the_node_and_sleeps_are_injected() -> None:
 
     assert attempts == [1, 2, 3], "the loop is in the node, not the graph"
     assert slept == [200, 400], "it sleeps between attempts, not after the last one"
-    assert out["band"] == DEGRADED
+    assert out["status"] == DEGRADED
 
 
 def test_a_non_retryable_write_failure_stops_after_one_attempt() -> None:
@@ -335,4 +335,4 @@ def test_the_run_budget_stops_the_loop_before_the_attempt_limit() -> None:
     )
     run.budget.model_calls = POLICY.model_calls_per_run   # Chapter 13's name for it
     out = build(POLICY, always_503, READ, sleep=lambda _ms: None).invoke(run)
-    assert out["band"] == EXHAUSTED, "the run budget wins over the per-call attempts"
+    assert out["status"] == EXHAUSTED, "the run budget wins over the per-call attempts"

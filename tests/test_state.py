@@ -20,8 +20,12 @@ def a_run() -> BillingRun:
     )
 
 
-def test_a_run_starts_read_only() -> None:
-    assert a_run().band == "read-only"
+def test_a_run_starts_in_the_narrowest_band() -> None:
+    # Chapter 14: the default is observe, and a run only widens when the band table
+    # resolves it from evidence. The default of a field nobody set must be the one
+    # that can do the least.
+    assert a_run().band == "observe"
+    assert a_run().status == "running"
 
 
 def test_a_run_starts_with_no_proposal_and_no_decisions() -> None:

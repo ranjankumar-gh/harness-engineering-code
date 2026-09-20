@@ -18,6 +18,7 @@ from langgraph.errors import GraphRecursionError, InvalidUpdateError
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import Send
 
+from harness.authority import Band, BandTable
 from harness.billing import BillingFacts, Invoice
 from harness.ceilings import (
     InMemoryFleetLedger,
@@ -51,6 +52,7 @@ from harness.tools import ToolRegistry
 
 CONFIG = RunBudgetConfig.load("policies/run-budget.toml")
 GATES = GatePolicy.load("policies/gate-policy.toml")
+TABLE = BandTable.load("policies/authority-bands.toml")
 
 # What the stand-in model reports for each call, as a provider would in its usage block.
 PROPOSE_USAGE = (3400, 220)
@@ -74,7 +76,12 @@ def ticket(n: int, dupes: int) -> DisputeRun:
         account_id="acct_7730",
         invoices=tuple(Invoice(i, Decimal("40.00")) for i in ids),
     )
-    run = DisputeRun(run_id=f"dispute-{n}", mode=Mode.QUEUE_DRAIN, facts=facts)
+    run = DisputeRun(
+        run_id=f"dispute-{n}",
+        mode=Mode.QUEUE_DRAIN,
+        facts=facts,
+        band=Band.CLOSED_LOOP.value,   # Chapter 14 resolves this; here it is given
+    )
     run.listed = ids
     run.facts.raw = {"duplicates": ",".join(ids[:dupes])}
     return run
@@ -170,7 +177,7 @@ def build_with(config: RunBudgetConfig) -> Any:
         }
 
     def after_refund(state: DisputeRun) -> str:
-        if state.band == EXCEEDED:
+        if state.status == EXCEEDED:
             return "escalate"
         if len(state.refunded) < len(state.duplicates):
             return "refund"
@@ -203,7 +210,7 @@ def build_with(config: RunBudgetConfig) -> Any:
     g.add_edge("judge", "settle")
     g.add_conditional_edges(
         "settle",
-        lambda s: "escalate" if s.band == EXCEEDED else "refund",
+        lambda s: "escalate" if s.status == EXCEEDED else "refund",
         ["refund", "escalate"],
     )
     g.add_conditional_edges(
@@ -252,7 +259,7 @@ def show_before() -> None:
 
 
 def show_with() -> None:
-    limit = recursion_limit(CONFIG, "queue-drain")
+    limit = recursion_limit(CONFIG, Band.CLOSED_LOOP.value)
     app = build_with(CONFIG)
 
     print("\n=== the same ticket with the budget config")
@@ -310,7 +317,7 @@ def show_depth() -> None:
         ),
     )
     app = build_with(tight)
-    derived = recursion_limit(tight, "queue-drain")
+    derived = recursion_limit(tight, Band.CLOSED_LOOP.value)
     out, supersteps = run_graph(app, ticket(12, 5), derived)
     for d in out.decisions:
         print(f"  {d.gate}: {d.disposition}: {d.reason}")
@@ -360,13 +367,13 @@ def show_checks() -> None:
         print("  draft:", line)
     print("  unreachable, shipped:", unreachable(CONFIG) or "none")
     registry = ToolRegistry.load("policies/tool-safety.toml")
-    print("  unenforceable:", unenforceable(CONFIG, registry, GATES) or "none")
+    print("  unenforceable:", unenforceable(CONFIG, registry, GATES, TABLE) or "none")
 
 
 def show_fleet() -> None:
     print("\n=== the fleet: 240 overnight runs, each reserving its own ceiling")
-    per_run = CONFIG.limit(Meter.COST, "queue-drain")
-    fleet_limit = CONFIG.limit(Meter.COST, "queue-drain", Scope.FLEET)
+    per_run = CONFIG.limit(Meter.COST, Band.CLOSED_LOOP.value)
+    fleet_limit = CONFIG.limit(Meter.COST, Band.CLOSED_LOOP.value, Scope.FLEET)
     assert per_run is not None and fleet_limit is not None
     ledger = InMemoryFleetLedger(fleet_limit, CONFIG.fleet_window, CONFIG.hold_for)
     t0 = datetime(2026, 9, 18, 23, 0, tzinfo=timezone.utc)

@@ -100,7 +100,7 @@ def approve(state: RunState[Any]) -> dict[str, Any]:
     decision = interrupt(
         {"tool": proposal.tool if proposal else "", "run_id": state.run_id}
     )
-    return {"band": APPROVED if decision == "approve" else state.band}
+    return {"status": APPROVED if decision == "approve" else state.status}
 
 
 def make_execute_node(
@@ -119,7 +119,7 @@ def make_execute_node(
 
     def execute(state: RunState[Any]) -> dict[str, Any]:
         proposal = state.proposal
-        if proposal is None or state.band != APPROVED:
+        if proposal is None or state.status != APPROVED:
             state.record("replay-guard", "refuse", "no approved proposal to execute")
             return {"decisions": state.decisions}
         if proposal.tool != allowed:
