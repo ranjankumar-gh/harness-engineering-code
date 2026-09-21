@@ -76,7 +76,7 @@ class Question:
     keeping a note about: `controls-ran` coming back negative says the harness was in the
     path, which rules out one sub-claim and acquits nothing. No single question clears a
     layer. A layer is cleared when every question that could convict it has run against a
-    real record and failed, which is a property of the set rather than of any member.
+    real record and failed, which is a property of the set, not of any member.
     """
 
     id: str
