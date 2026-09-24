@@ -3,10 +3,9 @@
 # Rungs are tried in order. Each one uses more information than the last and costs more,
 # which is why the order is fixed and the file may only omit rungs, never reorder them.
 #
-# The deterministic rung is the one most teams do not have. It is free, it needs no model
-# call, and it handles the majority of real structured-output failures: a fenced block, a
-# trailing comma, a number sent as a string. Chapter 17's overnight outage was this rung
-# being absent.
+# The deterministic rung is free and needs no model call. It handles the failures that
+# change the shape of an answer without changing the answer: a fenced block, a trailing
+# comma, a number sent as a string. Chapter 17 opens on a night without it.
 
 [[step]]
 rung = "accept"

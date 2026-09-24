@@ -56,7 +56,7 @@ class ExerciseLog:
 
     @classmethod
     def from_signals(cls, signals: Iterable["Signal"]) -> "ExerciseLog":
-        """Chapter 6 made good on the promise this docstring used to contain."""
+        """Chapter 6: built from the stream, so the readiness policy reads production."""
         log = cls()
         for s in signals:
             if s.kind is SignalKind.CONTROL and s.component and s.role and s.outcome:

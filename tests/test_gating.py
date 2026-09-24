@@ -67,7 +67,7 @@ def test_a_thresholded_tool_with_no_amount_is_not_automatic() -> None:
 
 
 def test_a_failed_verdict_escalates_rather_than_refusing() -> None:
-    """Chapter 7: a harness whose only answer to novelty is no gets switched off."""
+    """Chapter 3: a harness whose only answer to novelty is no gets switched off."""
     failed = dict(PASSED)
     failed["invoice_owned"] = Verdict("invoice_owned", False, "on no invoice")
     d = decide("issue_refund", "940.00", Mode.QUEUE_DRAIN, failed)
