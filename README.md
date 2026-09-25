@@ -46,3 +46,7 @@ harness.
 Python 3.12 or newer. The book was written against 3.13. Version ranges are in `pyproject.toml`,
 verified against PyPI on 10 September 2026. Chapter 1 names the exact versions the book was run
 against.
+
+## License
+
+The code is MIT-licensed; see `LICENSE`. The book's text and figures are not covered by it.
