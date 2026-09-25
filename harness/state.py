@@ -135,7 +135,7 @@ class Budget:
     """Counters the model cannot write. Chapter 13 turns each into a bound.
 
     Chapter 13 added `model_calls` and gave `tool_calls` one meaning: tool calls that
-    were made. Before that, Chapter 8's retry node counted model calls into it.
+    were made. Before that, Chapter 8's retry node counted its attempts into it.
     """
 
     tokens_in: int = 0
