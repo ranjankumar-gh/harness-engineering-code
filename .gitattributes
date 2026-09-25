@@ -1,0 +1,2 @@
+# Hooks run under sh; CRLF endings break the shebang and every line after it.
+.githooks/* text eol=lf
