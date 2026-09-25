@@ -12,6 +12,9 @@ git tag --list
 git checkout ch01-demo-cliff
 ```
 
+The tags follow reading order. Chapter 17's two modules, `liveness.py` and `readiness.py`, land
+before Chapter 4, because Chapters 6, 14, and 16 extend them; Appendix D of the book explains.
+
 ## Running it
 
 ```bash
@@ -32,13 +35,14 @@ to know about a harness is knowable without it.
 | `harness/state.py` | `RunState`, the object every component reads, and `RunContext`, the read-only view | 1 |
 | `harness/errors.py` | Every failure the harness raises | 1 |
 | `harness/audit.py` | The one-page harness audit | 1 |
-| `harness/components/` | The controls each chapter adds | 4 onward |
+| `harness/*.py`, `harness/components/` | The controls each chapter adds: top-level modules, and the components composed into the harness | 3 onward |
 | `harness/graph/` | The only framework-aware code in the package | Part II |
 
-Nothing below `harness/graph/` imports a framework. Delete `graph/` and you still have a working
+Nothing outside `harness/graph/` imports a framework. Delete `graph/` and you still have a working
 harness.
 
 ## Versions
 
-Python 3.12 or newer. The book was written against 3.13. Library pins are in `pyproject.toml` and
-were verified against PyPI on 10 September 2026.
+Python 3.12 or newer. The book was written against 3.13. Version ranges are in `pyproject.toml`,
+verified against PyPI on 10 September 2026. Chapter 1 names the exact versions the book was run
+against.
