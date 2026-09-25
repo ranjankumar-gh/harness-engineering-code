@@ -8,15 +8,23 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from pathlib import Path
 from typing import Any
 
 from harness.authority import BAND_ORDER as _BANDS
+from harness.authority import Band, BandTable, width
 from harness.liveness import PROOF_OF_LIFE, ExerciseLog, Outcome
 from harness.roles import HarnessRegistry, Role
 
 #: Chapter 14 replaced the provisional tuple that used to live here. The ordering is the
 #: authority band table's, and it is the only one in the package.
 BAND_ORDER: tuple[str, ...] = tuple(b.value for b in _BANDS)
+
+#: Chapter 14's band table: each mode's ceiling, and whether a band keeps a person in the
+#: path. The authority check reads both from here and declares neither again.
+_TABLE = BandTable.load(
+    Path(__file__).resolve().parents[1] / "policies" / "authority-bands.toml"
+)
 
 
 @dataclass(frozen=True)
@@ -86,14 +94,29 @@ class QueueDrainReadiness:
 
     def _authority(self, copilot: str, queue_drain: str) -> Finding:
         try:
-            wider = BAND_ORDER.index(queue_drain) > BAND_ORDER.index(copilot)
+            bands = {"copilot": Band(copilot), "queue-drain": Band(queue_drain)}
         except ValueError as exc:
             return Finding("authority", False, f"unknown band: {exc}")
+        for mode, band in bands.items():
+            ceiling = _TABLE.rule_for(mode).ceiling
+            if width(band) > width(ceiling):
+                return Finding(
+                    "authority",
+                    False,
+                    f"{mode} is {band.value}, above its ceiling of {ceiling.value}",
+                )
+        unattended = _TABLE.spec(bands["queue-drain"])
+        if unattended.executes and unattended.human_in_path:
+            return Finding(
+                "authority",
+                False,
+                f"{queue_drain} keeps a person in the path and queue-drain has none, "
+                f"so its irreversible actions wait on a reviewer who is not there",
+            )
         return Finding(
             "authority",
-            not wider,
-            f"queue-drain is {queue_drain}, copilot is {copilot}"
-            + ("; unattended is wider than supervised" if wider else ""),
+            True,
+            f"queue-drain is {queue_drain}, copilot is {copilot}",
         )
 
     def _stop_paths(self, armed: frozenset[str]) -> Finding:
