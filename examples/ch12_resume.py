@@ -125,7 +125,7 @@ def show_restart() -> None:
     """
 
     def gate(state: RunState[Any]) -> dict[str, Any]:
-        state.record("policy-gate", "allow", "89.00 within the automatic band")
+        state.record("policy-gate", "allow", "120.00 within the automatic band")
         state.budget.tool_calls += 6
         return {
             "decisions": state.decisions,
@@ -200,7 +200,7 @@ def show_shape_after_restart() -> None:
         plan=Plan("duplicate-charge", ("get_invoice", "issue_refund")),
     )
     state.context = state.context.add(Origin.OPERATOR, "billing agent", "system")
-    state.record("policy-gate", "allow", "89.00 within the automatic band")
+    state.record("policy-gate", "allow", "120.00 within the automatic band")
 
     serde = JsonPlusSerializer()
     back: RunState[dict[str, str]] = serde.loads_typed(serde.dumps_typed(state))
@@ -296,7 +296,7 @@ LEDGER: list[tuple[str, Decimal]] = []
 
 def billing_call(tool: str, arguments: dict[str, object]) -> object:
     if tool == "issue_refund":
-        LEDGER.append((str(arguments["invoice_id"]), Decimal("89.00")))
+        LEDGER.append((str(arguments["invoice_id"]), Decimal("120.00")))
     return {"ok": True}
 
 
