@@ -84,7 +84,7 @@ def main() -> None:
         print(f"  SchemaViolation: {exc}")
 
     print()
-    print("replaying today's controls against March's run")
+    print("replaying today's controls against September's run")
     today = {
         "amount-on-invoice": lambda detail: "failed",
         "refund-gate": lambda detail: "allowed",     # somebody widened it since

@@ -5,7 +5,7 @@
 #
 # The deterministic rung is free and needs no model call. It handles the failures that
 # change the shape of an answer without changing the answer: a fenced block, a trailing
-# comma, a number sent as a string. Chapter 17 opens on a night without it.
+# comma, whitespace around the document. Chapter 17 opens on a night without it.
 
 [[step]]
 rung = "accept"
